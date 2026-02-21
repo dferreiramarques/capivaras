@@ -706,7 +706,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .cap-card.reveal-card { cursor: default; }
 
 /* Art */
-.card-art-wrap { width: 100%; aspect-ratio: 3/4; position: relative; overflow: hidden; background: #f0f8f5; }
+.card-art-wrap { width: 100%; aspect-ratio: 3/4; max-height: 400px; position: relative; overflow: hidden; background: #f0f8f5; }
 .card-art { width: 100%; height: 100%; object-fit: cover; display: block; }
 .card-art-fallback {
   position: absolute; inset: 0;
@@ -885,17 +885,6 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .rules-body .rule-tag.green { background: #e8f5e0; color: #1e5a1e; border-color: #b0d890; }
 .rules-body .rule-tag.blue  { background: #e0f0f8; color: #185888; border-color: #80c0e0; }
 
-/* ── CREDITS ── */
-.credits {
-  width: 100%; text-align: center;
-  padding: 16px 0 8px;
-  font-size: .72rem; color: var(--muted);
-  font-family: 'Fraunces', serif; font-style: italic;
-  letter-spacing: .02em;
-}
-.credits a { color: var(--amber); text-decoration: none; }
-.credits a:hover { text-decoration: underline; }
-
 /* ── NOTIFICATION ── */
 #notif {
   position: fixed; top: 20px; right: 20px;
@@ -941,8 +930,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     </div>
   </div>
 </div>
-<div class="credits">Game Design: David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></div>
-
+<p style="text-align:center;padding:10px 0 4px;font-size:.72rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic">Um jogo de David Marques · <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
 <!-- LOBBY -->
 <div class="screen" id="screen-lobby">
   <div class="card-box" style="max-width:560px">
@@ -1045,8 +1033,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     </div>
   </div>
 </div>
-<div class="credits" style="max-width:1000px;margin:0 auto">Game Design: David Marques &nbsp;·&nbsp; Capivaras © 2023</div>
-
+<p style="width:100%;max-width:1000px;margin:0 auto;text-align:center;padding:10px 0 18px;font-size:.72rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic">Um jogo de David Marques · <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
 <!-- GAME OVER -->
 <div class="overlay" id="overlay-gameover">
   <div class="modal">
