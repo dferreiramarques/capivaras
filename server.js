@@ -527,7 +527,7 @@ body {
   font-size: 4rem; font-weight: 900;
   color: var(--ink); letter-spacing: -.02em; line-height: 1;
 }
-.game-logo span { color: var(--amber); }
+.game-logo span { color: var(--ink); }
 .game-tagline { font-size: .9rem; color: var(--muted); margin-bottom: 32px; font-style: italic; font-family: 'Fraunces', serif; }
 .h-rule { width: 36px; height: 2px; background: var(--amber); opacity: .5; margin: 0 auto 28px; border-radius: 2px; }
 
@@ -835,7 +835,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 <!-- GAME -->
 <div class="screen" id="screen-game">
   <div class="game-header">
-    <div class="header-title">Capi<span>varas</span></div>
+    <div class="header-title">Capivaras</div>
     <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
     <div class="deck-info" id="deck-info">—</div>
     <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
@@ -887,15 +887,16 @@ let _nt;
 function notif(t,d=3200){ const e=document.getElementById('notif'); e.textContent=t; e.classList.add('show'); clearTimeout(_nt); _nt=setTimeout(()=>e.classList.remove('show'),d); }
 
 function cardArtHTML(card){
-  // card.img is primary, card.fallback is the plain-cap version (always exists)
   const src='/cards/'+card.img+'.png';
   return '<div class="card-art-wrap">'+
-    '<img class="card-art" src="'+src+'" alt="" '+
-      'onload="this.nextElementSibling.classList.add(\'hidden\')" '+
-      'onerror="this.style.display=\'none\';this.nextElementSibling.classList.remove(\'hidden\')">'+
+    '<img class="card-art" src="'+src+'" alt="" onload="capImgOk(this)" onerror="capImgErr(this)">'+
     '<div class="card-art-fallback">'+card.cap+'</div>'+
   '</div>';
 }
+
+// Image load helpers — called via inline onload/onerror (avoids quote-escaping issues)
+function capImgOk(img){ img.nextElementSibling.classList.add('hidden'); }
+function capImgErr(img){ img.style.display='none'; img.nextElementSibling.classList.remove('hidden'); }
 
 function connect(){
   const proto=location.protocol==='https:'?'wss://':'ws://';
