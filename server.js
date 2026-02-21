@@ -417,7 +417,20 @@ function handleReconnect(ws, msg) {
 }
 
 // ─── HTTP + WS SERVER ────────────────────────────────────────────────────────
-const MANIFEST = JSON.stringify('{\n  "name": "Capivaras",\n  "short_name": "Capivaras",\n  "description": "Um jogo de apostas secretas no Pantanal",\n  "start_url": "/",\n  "display": "standalone",\n  "background_color": "#f8f2e2",\n  "theme_color": "#c47c28",\n  "orientation": "any",\n  "icons": [\n    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },\n    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }\n  ]\n}');
+const MANIFEST = `{
+  "name": "Capivaras",
+  "short_name": "Capivaras",
+  "description": "Um jogo de apostas secretas no Pantanal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f2e2",
+  "theme_color": "#c47c28",
+  "orientation": "any",
+  "icons": [
+    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}`;
 const SW = "self.addEventListener('fetch', e => {\n  // network-first: serve fresh if online, nothing cached\n});";
 
 const server = http.createServer((req, res) => {
@@ -927,7 +940,8 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <div class="play-icon" id="play-icon">▶</div>
       <div class="video-label">Como jogar — ver as regras</div>
       <div class="video-missing" id="video-missing">regras.mp4 não encontrado</div>
-    <p style="text-align:center;font-size:.68rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic;padding:4px 0 0">Um jogo de David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
+    </div>
+    <p style="text-align:center;font-size:.68rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic;padding:2px 0 0">Um jogo de David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
   </div>
 </div>
 <!-- LOBBY -->
