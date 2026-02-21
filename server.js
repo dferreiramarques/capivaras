@@ -614,22 +614,29 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .game-header {
   width: 100%; max-width: 1000px;
   display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px;
-  margin-bottom: 10px; padding-bottom: 10px;
+  flex-wrap: nowrap; gap: 6px;
+  margin-bottom: 8px; padding-bottom: 8px;
   border-bottom: 1.5px solid var(--border2);
+}
+.header-left {
+  display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;
 }
 .header-title {
   font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 900;
-  color: var(--ink); letter-spacing: -.01em;
+  color: var(--ink); letter-spacing: -.01em; white-space: nowrap;
 }
 .header-title span { color: var(--amber); }
 .bird-token {
   background: #fff8e0; border: 1.5px solid #e8c878;
-  padding: 4px 13px; border-radius: 20px;
-  font-size: .78rem; color: #8a5a00; font-weight: 700;
+  padding: 3px 8px; border-radius: 20px;
+  font-size: .7rem; color: #8a5a00; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap; overflow: hidden; min-width: 0;
 }
 .bird-token.has-holder { border-color: var(--gold); color: #7a4800; background: #fff0c0; }
-.deck-info { font-size: .74rem; color: var(--muted); }
+.bird-pip   { width:22px; height:22px; object-fit:cover; border-radius:50%; flex-shrink:0; }
+.bird-pip.big { width:28px; height:28px; }
+.deck-info  { font-size: .74rem; color: var(--muted); white-space: nowrap; }
 
 /* ── PLAYERS BAR ── */
 .players-bar { width: 100%; max-width: 1000px; display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -791,10 +798,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
 
 
-.bird-pip          { width:22px; height:22px; object-fit:cover; border-radius:50%; vertical-align:middle; margin-right:2px; }
-.bird-pip.big      { width:44px; height:44px; }
-.bird-count        { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
-.bird-token        { display:inline-flex; align-items:center; gap:8px; }
+.bird-count { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
 
 
 /* ── VIDEO PLACEHOLDER ── */
@@ -873,9 +877,13 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 #notif.show { opacity: 1; }
 
 @media(max-width:640px){
-  .game-logo { font-size: 2.8rem; }
+  .game-logo      { font-size: 2.8rem; }
   /* cards keep 1/3 width on mobile via flex-basis */
-  .player-chip { min-width: 80px; }
+  .player-chip    { min-width: 80px; }
+  .header-title   { font-size: 1.1rem; }
+  .bird-pip.big   { width:18px; height:18px; }
+  .bird-token     { font-size: .6rem; padding: 2px 5px; gap: 3px; }
+  .deck-info      { display: none; }
 }
 </style>
 </head>
@@ -939,8 +947,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 <!-- GAME -->
 <div class="screen" id="screen-game">
   <div class="game-header">
-    <div class="header-title">Capivaras</div>
-    <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
+    <div class="header-left">
+      <div class="header-title">Capivaras</div>
+      <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
+    </div>
     <div class="deck-info" id="deck-info">—</div>
     <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
   </div>
