@@ -934,7 +934,6 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     <div class="header-title">Capivaras</div>
     <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
     <div class="deck-info" id="deck-info">—</div>
-    <button class="btn btn-outline btn-sm" id="btn-ambient" title="Desligar som ambiente" onclick="toggleAmbient()" style="font-size:1.1rem;padding:6px 10px;">🔊</button>
     <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
   </div>
   <div class="players-bar" id="players-bar"></div>
@@ -1090,23 +1089,8 @@ function playKnock(){
   }catch(e){}
 }
 
-// Ambient Pantanal loop — loads public/ambient.mp3 if present
-let _ambientEl = null;
-let _ambientMuted = false;
-function startAmbient(){
-  if(_ambientEl) return;
-  _ambientEl = new Audio('/ambient.mp3');
-  _ambientEl.loop = true;
-  _ambientEl.volume = _ambientMuted ? 0.0 : 1.0;
-  _ambientEl.play().catch(()=>{ _ambientEl=null; });
-}
-function stopAmbient(){ if(_ambientEl){ _ambientEl.pause(); _ambientEl=null; } }
-function toggleAmbient(){
-  _ambientMuted = !_ambientMuted;
-  if(_ambientEl) _ambientEl.volume = _ambientMuted ? 0.0 : 1.0;
-  const btn = document.getElementById('btn-ambient');
-  if(btn){ btn.textContent = _ambientMuted ? '🔇' : '🔊'; btn.title = _ambientMuted ? 'Ligar som ambiente' : 'Desligar som ambiente'; }
-}
+
+
 
 // Track bets: knock every time the total count increments
 let _prevBetCount = -1;
@@ -1167,8 +1151,6 @@ function handleMsg(msg){
       state=msg.state; myGameSeat=state.mySeat; isSolo=state.isSolo;
       checkNewBets(state.betsPlaced);
       checkBirdChange(state.birdHolder);
-      if(state.phase==='BETTING') startAmbient();
-      if(state.phase==='GAME_OVER') stopAmbient();
       closeOverlay('overlay-gameover'); showScreen('screen-game'); renderGame();
       if(state.phase==='GAME_OVER') showGameOver();
       break;
@@ -1418,9 +1400,9 @@ document.getElementById('btn-go').onclick=()=>{
 document.getElementById('btn-back-name').onclick=()=>showScreen('screen-name');
 document.getElementById('btn-start').onclick=()=>{ document.getElementById('btn-start').disabled=true; send({type:'START'}); };
 document.getElementById('btn-leave-wait').onclick=()=>{ send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; myLobbyId=''; myLobbySeat=-1; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
-document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ stopAmbient(); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
+document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
 document.getElementById('btn-restart').onclick=()=>{ closeOverlay('overlay-gameover'); send({type:'RESTART'}); };
-document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); stopAmbient(); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
+document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
 
 if(sessionStorage.getItem('cap_token')) connect();
 </script>
