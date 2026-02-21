@@ -654,15 +654,14 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .pbet    { font-size: .65rem; color: var(--teal2); margin-top: 2px; font-weight: 600; }
 
 /* ── TABLE ── */
-.table-area  { width: 100%; max-width: 1000px; margin-bottom: 10px; }
+.table-area  { width: 100%; max-width: 100%; margin-bottom: 10px; }
 .table-label { font-size: .7rem; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.table-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.table-cards { display: grid; gap: 10px; grid-template-columns: repeat(var(--n-cards,3), 1fr); }
 
 /* ── THE CARD ── */
 .cap-card {
-  flex: 0 1 calc(33.333% - 7px);
-  min-width: calc(33.333% - 7px);
-  max-width: calc(33.333% - 7px);
+  min-width: 0;
+  max-width: 100%;
   border-radius: 14px; border: 2px solid var(--border2);
   cursor: pointer; transition: all .18s;
   position: relative; overflow: hidden;
@@ -878,7 +877,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 
 @media(max-width:640px){
   .game-logo      { font-size: 2.8rem; }
-  /* cards keep 1/3 width on mobile via flex-basis */
+
   .player-chip    { min-width: 80px; }
   .header-title   { font-size: 1.1rem; }
   .bird-pip.big   { width:18px; height:18px; }
@@ -1261,6 +1260,7 @@ function renderGame(){
 
   /* table cards */
   const area=document.getElementById('table-cards'); area.innerHTML='';
+  area.style.setProperty('--n-cards', state.n);
   (state.table||[]).forEach((card,pos)=>{
     const div=document.createElement('div');
     let cls='cap-card', extra='';
