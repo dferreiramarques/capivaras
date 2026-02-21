@@ -1215,7 +1215,7 @@ function handleMsg(msg){
       myToken=sessionStorage.getItem('cap_token')||''; myLobbySeat=msg.seat;
       myGameSeat=msg.gameSeat!==undefined?msg.gameSeat:msg.seat; isSolo=msg.solo; isHost=msg.seat===0;
       notif('Reconectado!'); send({type:'REQUEST_STATE'}); break;
-    case 'RECONNECT_FAIL': sessionStorage.removeItem('cap_token'); myToken=''; send({type:'LOBBIES'}); break;
+    case 'RECONNECT_FAIL': sessionStorage.removeItem('cap_token'); myToken=''; myName=''; showScreen('screen-name'); break;
     case 'OPPONENT_DISCONNECTED_GRACE': notif(msg.name+' desligou-se. '+Math.round(msg.graceMs/1000)+'s...',6000); break;
     case 'OPPONENT_RECONNECTED': notif(msg.name+' voltou!'); break;
     case 'OPPONENT_LEFT': notif('Um oponente saiu.',5000); break;
