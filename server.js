@@ -1012,7 +1012,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   <!-- RULES PANEL -->
   <div class="rules-panel">
     <button class="rules-toggle" id="rules-toggle" onclick="toggleRules()">
-      <span>Como jogar — Regras do Pantanal</span>
+      <span>Como jogar — Regras do Capivaras</span>
       <span class="chevron">▼</span>
     </button>
     <div class="rules-body" id="rules-body">
