@@ -16,6 +16,9 @@ const AUTODEAL_MS = 10_000;
 const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif',
+  '.mp4': 'video/mp4', '.mp3': 'audio/mpeg',
+  '.webmanifest': 'application/manifest+json', '.json': 'application/json',
+  '.js': 'application/javascript',
 };
 
 function serveStatic(req, res) {
@@ -414,10 +417,20 @@ function handleReconnect(ws, msg) {
 }
 
 // ─── HTTP + WS SERVER ────────────────────────────────────────────────────────
+const MANIFEST = JSON.stringify('{\n  "name": "Capivaras",\n  "short_name": "Capivaras",\n  "description": "Um jogo de apostas secretas no Pantanal",\n  "start_url": "/",\n  "display": "standalone",\n  "background_color": "#f8f2e2",\n  "theme_color": "#c47c28",\n  "orientation": "any",\n  "icons": [\n    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },\n    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }\n  ]\n}');
+const SW = "self.addEventListener('fetch', e => {\n  // network-first: serve fresh if online, nothing cached\n});";
+
 const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/index.html') {
+  const url = req.url.split('?')[0];
+  if (url === '/' || url === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(CLIENT_HTML);
+  } else if (url === '/manifest.webmanifest' || url === '/manifest.json') {
+    res.writeHead(200, { 'Content-Type': 'application/manifest+json' });
+    res.end(MANIFEST);
+  } else if (url === '/sw.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript', 'Service-Worker-Allowed': '/' });
+    res.end(SW);
   } else {
     serveStatic(req, res);
   }
@@ -463,6 +476,15 @@ const CLIENT_HTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Capivaras</title>
+<meta name="application-name" content="Capivaras">
+<meta name="description" content="Um jogo de apostas secretas no Pantanal">
+<meta name="theme-color" content="#c47c28">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Capivaras">
+<link rel="apple-touch-icon" href="/bird.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
@@ -863,6 +885,17 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .rules-body .rule-tag.green { background: #e8f5e0; color: #1e5a1e; border-color: #b0d890; }
 .rules-body .rule-tag.blue  { background: #e0f0f8; color: #185888; border-color: #80c0e0; }
 
+/* ── CREDITS ── */
+.credits {
+  width: 100%; text-align: center;
+  padding: 16px 0 8px;
+  font-size: .72rem; color: var(--muted);
+  font-family: 'Fraunces', serif; font-style: italic;
+  letter-spacing: .02em;
+}
+.credits a { color: var(--amber); text-decoration: none; }
+.credits a:hover { text-decoration: underline; }
+
 /* ── NOTIFICATION ── */
 #notif {
   position: fixed; top: 20px; right: 20px;
@@ -908,6 +941,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     </div>
   </div>
 </div>
+<div class="credits">Game Design: David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></div>
 
 <!-- LOBBY -->
 <div class="screen" id="screen-lobby">
@@ -1011,6 +1045,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     </div>
   </div>
 </div>
+<div class="credits" style="max-width:1000px;margin:0 auto">Game Design: David Marques &nbsp;·&nbsp; Capivaras © 2023</div>
 
 <!-- GAME OVER -->
 <div class="overlay" id="overlay-gameover">
@@ -1423,6 +1458,7 @@ document.getElementById('btn-restart').onclick=()=>{ closeOverlay('overlay-gameo
 document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
 
 if(sessionStorage.getItem('cap_token')) connect();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script>
 </body>
 </html>`;
