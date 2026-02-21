@@ -788,6 +788,70 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .bird-count        { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
 .bird-token        { display:inline-flex; align-items:center; gap:8px; }
 
+
+/* ── VIDEO PLACEHOLDER ── */
+.video-wrap {
+  margin-top: 24px;
+  border-radius: 14px; overflow: hidden;
+  border: 1.5px solid var(--border2);
+  background: linear-gradient(160deg, #e8f4f0 0%, #d0ece6 100%);
+  position: relative; aspect-ratio: 16/9;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; color: var(--muted); cursor: pointer;
+}
+.video-wrap video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+.video-wrap .play-icon {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(196,124,40,.15); border: 2px solid var(--amber);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; color: var(--amber); position: relative; z-index: 1;
+  transition: background .2s;
+}
+.video-wrap:hover .play-icon { background: rgba(196,124,40,.28); }
+.video-label { font-size: .8rem; font-family: 'Fraunces', serif; font-style: italic; position: relative; z-index: 1; }
+.video-missing { font-size: .75rem; color: var(--muted); margin-top: 4px; position: relative; z-index: 1; }
+
+/* ── RULES PANEL ── */
+.rules-panel {
+  width: 100%; max-width: 1000px;
+  margin-top: 4px; margin-bottom: 20px;
+  border: 1.5px solid var(--border2); border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(100,60,20,.06);
+}
+.rules-toggle {
+  width: 100%; background: none; border: none; cursor: pointer;
+  padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;
+  font-family: 'Fraunces', serif; font-size: .88rem; font-weight: 700;
+  color: var(--ink2); text-align: left;
+  transition: background .15s;
+}
+.rules-toggle:hover { background: rgba(196,124,40,.06); }
+.rules-toggle .chevron { font-size: .7rem; transition: transform .25s; color: var(--amber); }
+.rules-toggle.open .chevron { transform: rotate(180deg); }
+.rules-body {
+  display: none; padding: 0 20px 20px;
+  border-top: 1px solid var(--border2);
+  animation: slideDown .2s ease;
+}
+.rules-body.open { display: block; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+.rules-body h3 {
+  font-family: 'Fraunces', serif; font-size: 1rem; font-weight: 700;
+  color: var(--amber); margin: 18px 0 6px;
+}
+.rules-body p { font-size: .84rem; color: var(--ink2); line-height: 1.6; margin-bottom: 6px; }
+.rules-body ul { margin: 4px 0 8px 18px; }
+.rules-body li { font-size: .82rem; color: var(--ink2); line-height: 1.7; }
+.rules-body .rule-tag {
+  display: inline-block; padding: 1px 7px; border-radius: 5px;
+  font-size: .72rem; font-weight: 700; margin-right: 3px;
+  background: #fff3c8; color: #7a5000; border: 1px solid #e8c060;
+}
+.rules-body .rule-tag.green { background: #e8f5e0; color: #1e5a1e; border-color: #b0d890; }
+.rules-body .rule-tag.blue  { background: #e0f0f8; color: #185888; border-color: #80c0e0; }
+
 /* ── NOTIFICATION ── */
 #notif {
   position: fixed; top: 20px; right: 20px;
@@ -812,13 +876,21 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 
 <!-- NAME -->
 <div class="screen active" id="screen-name">
-  <div class="card-box" style="text-align:center">
-    <div class="game-logo">Capi<span>varas</span></div>
-    <div class="game-tagline">Um jogo de apostas secretas</div>
-    <div class="h-rule"></div>
-    <h2 style="text-align:left">Como te chamas?</h2>
-    <input type="text" id="inp-name" placeholder="O teu nome..." maxlength="20" autocomplete="off">
-    <button class="btn btn-primary" id="btn-go">Entrar no jogo</button>
+  <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+    <div class="card-box" style="text-align:center">
+      <div class="game-logo">Capi<span>varas</span></div>
+      <div class="game-tagline">Um jogo de apostas secretas</div>
+      <div class="h-rule"></div>
+      <h2 style="text-align:left">Como te chamas?</h2>
+      <input type="text" id="inp-name" placeholder="O teu nome..." maxlength="20" autocomplete="off">
+      <button class="btn btn-primary" id="btn-go">Entrar no jogo</button>
+    </div>
+    <div class="video-wrap" id="video-wrap" onclick="playRulesVideo()">
+      <video id="rules-video" preload="none" controls style="display:none"></video>
+      <div class="play-icon" id="play-icon">▶</div>
+      <div class="video-label">Como jogar — ver as regras</div>
+      <div class="video-missing" id="video-missing">regras.mp4 não encontrado</div>
+    </div>
   </div>
 </div>
 
@@ -878,6 +950,49 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   <div class="my-area">
     <div class="my-area-label">As tuas capivaras</div>
     <div class="my-scored" id="my-scored"></div>
+  </div>
+
+  <!-- RULES PANEL -->
+  <div class="rules-panel">
+    <button class="rules-toggle" id="rules-toggle" onclick="toggleRules()">
+      <span>Como jogar — Regras do Pantanal</span>
+      <span class="chevron">▼</span>
+    </button>
+    <div class="rules-body" id="rules-body">
+
+      <h3>O Pantanal acorda...</h3>
+      <p>No coração húmido do Pantanal, uma colónia de capivaras relaxa ao sol. Chegaram os humanos — cada um quer dar festinhas nas suas favoritas. Mas as capivaras são tímidas: se dois humanos se aproximarem ao mesmo tempo, fogem imediatamente. Só o jogador que chegar <em>sozinho</em> ganha a sua capivara.</p>
+
+      <h3>O teu turno</h3>
+      <p>A cada ronda, são colocadas na mesa tantas cartas quantos os jogadores. Em segredo, cada um coloca uma ficha virada para baixo com o número da carta que quer conquistar. Quando todos estiverem prontos, revelam ao mesmo tempo.</p>
+      <ul>
+        <li><span class="rule-tag green">Sozinho</span> Foste o único a escolher essa carta? É tua!</li>
+        <li><span class="rule-tag">Empate</span> Mais de um jogador escolheu a mesma carta? Ninguém ganha — as capivaras fugiram.</li>
+      </ul>
+
+      <h3>O pássaro amarelo</h3>
+      <p>Algumas cartas têm um pássaro amarelo. Quem recolher a primeira dessas cartas fica com o <strong>token do pássaro</strong> (vale +5 pontos no fim). Para roubar o token, tens de acumular <em>mais</em> cartas com pássaro do que o detentor atual. Em caso de empate, o token não se move.</p>
+
+      <h3>Os nenúfares</h3>
+      <p>Certas cartas têm nenúfares coloridos. Coleciona as quatro cores para ganhar <strong>+10 pontos bónus</strong> no final.</p>
+      <ul>
+        <li><span class="rule-tag" style="background:#fff3c8;color:#7a5000;border-color:#e8c060">Amarelo</span>
+            <span class="rule-tag" style="background:#ffe8e0;color:#8a2810;border-color:#e8a090">Vermelho</span>
+            <span class="rule-tag" style="background:#e8eef4;color:#3a5068;border-color:#a8c0d0">Branco</span>
+            <span class="rule-tag blue">Azul</span> — quatro cores, +10 pontos</li>
+      </ul>
+
+      <h3>O baralho</h3>
+      <p>O baralho de 36 cartas é jogado duas vezes. Quando acaba pela primeira vez, baralha-se o descarte e continua. Quando acaba pela segunda vez, o jogo termina e contam-se os pontos.</p>
+
+      <h3>Pontuação final</h3>
+      <ul>
+        <li>Cada <strong>capivara</strong> nas cartas recolhidas = <strong>1 ponto</strong></li>
+        <li>Token do <strong>pássaro</strong> = <strong>+5 pontos</strong></li>
+        <li>Quatro cores de <strong>nenúfar</strong> = <strong>+10 pontos</strong></li>
+      </ul>
+      <p style="margin-top:10px;font-style:italic;color:var(--muted)">Arrisca, petisca, e que as capivaras estejam do teu lado.</p>
+    </div>
   </div>
 </div>
 
@@ -1249,6 +1364,48 @@ function showGameOver(){
   });
   document.getElementById('btn-restart').style.display=(isSolo||isHost)?'inline-flex':'none';
   openOverlay('overlay-gameover');
+}
+
+// ── VIDEO RULES ──────────────────────────────────────────────────────────────
+function checkVideoExists(){
+  fetch('/regras.mp4', {method:'HEAD'}).then(r=>{
+    const wrap=document.getElementById('video-wrap');
+    const missing=document.getElementById('video-missing');
+    const playIcon=document.getElementById('play-icon');
+    if(r.ok){
+      if(missing) missing.style.display='none';
+      if(playIcon) playIcon.style.display='flex';
+    } else {
+      if(playIcon) playIcon.style.display='none';
+      if(missing) missing.style.display='block';
+    }
+  }).catch(()=>{
+    const pi=document.getElementById('play-icon'); if(pi) pi.style.display='none';
+  });
+}
+function playRulesVideo(){
+  const video=document.getElementById('rules-video');
+  const wrap=document.getElementById('video-wrap');
+  const pi=document.getElementById('play-icon');
+  const lbl=wrap.querySelector('.video-label');
+  if(!video) return;
+  video.src='/regras.mp4';
+  video.style.display='block';
+  if(pi) pi.style.display='none';
+  if(lbl) lbl.style.display='none';
+  video.play().catch(()=>{});
+}
+// Check video on load
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', checkVideoExists);
+else checkVideoExists();
+
+// ── RULES TOGGLE ─────────────────────────────────────────────────────────────
+function toggleRules(){
+  const body=document.getElementById('rules-body');
+  const btn=document.getElementById('rules-toggle');
+  if(!body||!btn) return;
+  const open=body.classList.toggle('open');
+  btn.classList.toggle('open', open);
 }
 
 document.getElementById('inp-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('btn-go').click(); });
