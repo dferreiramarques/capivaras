@@ -135,7 +135,11 @@ function buildView(g, seat) {
   return {
     phase: g.phase, n: g.n, table: g.table,
     myBet: g.bets[seat], betsPlaced: g.bets.map(b => b !== null),
-    lastResult: g.lastResult,
+    lastResult: g.lastResult ? {
+      winners:    g.lastResult.winners,
+      birdUpdate: g.lastResult.birdUpdate,
+      cards:      g.lastResult.cards,
+    } : null,
     players: sc.map((s, i) => ({ ...s, isMe: i === seat, seat: i })),
     birdHolder: g.birdHolder,
     birdHolderCards: g.birdHolder !== null ? g.players[g.birdHolder].birdCards : 0,
@@ -649,7 +653,9 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 
 /* ── THE CARD ── */
 .cap-card {
-  flex: 1; min-width: 120px; max-width: 210px;
+  flex: 0 1 calc(33.333% - 7px);
+  min-width: calc(33.333% - 7px);
+  max-width: calc(33.333% - 7px);
   border-radius: 14px; border: 2px solid var(--border2);
   cursor: pointer; transition: all .18s;
   position: relative; overflow: hidden;
@@ -707,10 +713,12 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .lily-bird { background: #fff8d8; color: #7a5000; border: 1px solid #e8c040; }
 
 .card-result-label {
-  position: absolute; bottom: 8px; right: 8px; z-index: 2;
+  position: absolute; top: 7px; right: 8px; z-index: 2;
   font-size: .6rem; font-weight: 700;
-  padding: 2px 8px; border-radius: 5px;
+  padding: 2px 8px; border-radius: 12px;
   font-family: 'Nunito', sans-serif;
+  max-width: calc(100% - 52px); /* don't overlap the A/B/C badge */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .card-result-label.win    { background: var(--gold); color: #3a2000; }
 .card-result-label.nobody { background: rgba(100,80,60,.15); color: var(--muted); border: 1px solid var(--border); }
@@ -866,7 +874,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 
 @media(max-width:640px){
   .game-logo { font-size: 2.8rem; }
-  .cap-card { min-width: 90px; }
+  /* cards keep 1/3 width on mobile via flex-basis */
   .player-chip { min-width: 80px; }
 }
 </style>
