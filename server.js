@@ -706,7 +706,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .cap-card.reveal-card { cursor: default; }
 
 /* Art */
-.card-art-wrap { width: 100%; aspect-ratio: 3/4; max-height: 400px; position: relative; overflow: hidden; background: #f0f8f5; }
+.card-art-wrap { width: 100%; aspect-ratio: 300/420; max-height: 420px; position: relative; overflow: hidden; background: #f0f8f5; }
 .card-art { width: 100%; height: 100%; object-fit: cover; display: block; }
 .card-art-fallback {
   position: absolute; inset: 0;
@@ -927,10 +927,9 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <div class="play-icon" id="play-icon">▶</div>
       <div class="video-label">Como jogar — ver as regras</div>
       <div class="video-missing" id="video-missing">regras.mp4 não encontrado</div>
-    </div>
+    <p style="text-align:center;font-size:.68rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic;padding:4px 0 0">Um jogo de David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
   </div>
 </div>
-<p style="text-align:center;padding:10px 0 4px;font-size:.72rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic">Um jogo de David Marques · <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
 <!-- LOBBY -->
 <div class="screen" id="screen-lobby">
   <div class="card-box" style="max-width:560px">
