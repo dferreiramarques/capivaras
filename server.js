@@ -733,12 +733,30 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 /* ── MY SCORED ── */
 .my-area { width: 100%; max-width: 1000px; padding-bottom: 20px; }
 .my-area-label { font-size: .68rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.my-scored { display: flex; gap: 5px; flex-wrap: wrap; }
+.my-scored { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
 .mini-card {
-  background: var(--panel); border: 1px solid var(--border2);
-  border-radius: 7px; padding: 4px 9px;
-  font-size: .73rem; color: var(--ink2); display: flex; gap: 3px; align-items: center;
+  width: 100px; background: var(--card-bg);
+  border: 1.5px solid var(--border2); border-radius: 10px;
+  overflow: hidden; font-size: .7rem; color: var(--ink2);
+  box-shadow: 0 1px 4px rgba(100,60,20,.1);
+  display: flex; flex-direction: column;
 }
+.mini-card-art {
+  width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block;
+  background: linear-gradient(160deg, #f8f2e2 0%, #c8ede6 100%);
+}
+.mini-card-art.fallback {
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Fraunces', serif; font-weight: 900; font-size: 1.2rem;
+  color: var(--amber); opacity: .7;
+}
+.mini-card-label {
+  padding: 4px 6px 5px; border-top: 1px solid var(--border2);
+  font-size: .65rem; line-height: 1.3; color: var(--ink2);
+  background: #fffcf6;
+}
+.mini-card-badges { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 2px; }
+.mini-lily { padding: 1px 4px; border-radius: 4px; font-size: .58rem; font-weight: 700; }
 
 /* ── GAME OVER ── */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(46,26,10,.55); align-items: center; justify-content: center; z-index: 100; padding: 20px; backdrop-filter: blur(3px); }
@@ -765,8 +783,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
 
 
-.bird-pip   { width:18px; height:18px; object-fit:cover; border-radius:50%; vertical-align:middle; margin-right:2px; }
-.bird-count { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
+.bird-pip          { width:22px; height:22px; object-fit:cover; border-radius:50%; vertical-align:middle; margin-right:2px; }
+.bird-pip.big      { width:44px; height:44px; }
+.bird-count        { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
+.bird-token        { display:inline-flex; align-items:center; gap:8px; }
 
 /* ── NOTIFICATION ── */
 #notif {
@@ -898,6 +918,100 @@ function cardArtHTML(card){
   '</div>';
 }
 
+// ── AUDIO ENGINE ─────────────────────────────────────────────────────────────
+let _actx = null;
+function getCtx(){ if(!_actx) _actx = new (window.AudioContext||window.webkitAudioContext)(); if(_actx.state==='suspended') _actx.resume(); return _actx; }
+
+// Rubber duck squeak — when YOU pick a card
+function playDuck(){
+  try{
+    const ctx=getCtx(), now=ctx.currentTime;
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type='sine';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(280, now+0.08);
+    osc.frequency.exponentialRampToValueAtTime(350, now+0.14);
+    g.gain.setValueAtTime(0.25, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
+    osc.start(now); osc.stop(now+0.22);
+  }catch(e){}
+}
+
+// Bird tweet — when someone wins the bird token
+function playTweet(){
+  try{
+    const ctx=getCtx();
+    [0, 0.14, 0.26].forEach((delay,i)=>{
+      const now=ctx.currentTime+delay;
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='sine';
+      const f0=1400+i*200;
+      osc.frequency.setValueAtTime(f0, now);
+      osc.frequency.exponentialRampToValueAtTime(f0*1.8, now+0.06);
+      osc.frequency.exponentialRampToValueAtTime(f0*1.4, now+0.10);
+      g.gain.setValueAtTime(0.18, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+      osc.start(now); osc.stop(now+0.12);
+    });
+  }catch(e){}
+}
+
+// Wooden knock — when an opponent bets
+function playKnock(){
+  try{
+    const ctx=getCtx(), now=ctx.currentTime;
+    const buf=ctx.createBuffer(1,ctx.sampleRate*0.12,ctx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.018));
+    const src=ctx.createBufferSource(), g=ctx.createGain();
+    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=320;
+    src.buffer=buf; src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.55, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+    src.start(now);
+  }catch(e){}
+}
+
+// Ambient Pantanal loop — loads public/ambient.mp3 if present
+let _ambientEl = null;
+function startAmbient(){
+  if(_ambientEl) return;
+  _ambientEl = new Audio('/ambient.mp3');
+  _ambientEl.loop = true;
+  _ambientEl.volume = 0.18;
+  _ambientEl.play().catch(()=>{ _ambientEl=null; }); // silently fail if file absent
+}
+function stopAmbient(){ if(_ambientEl){ _ambientEl.pause(); _ambientEl=null; } }
+
+// Track bets to detect opponent actions
+let _prevBets = null;
+function checkNewBets(newBets){
+  if(!_prevBets){ _prevBets=newBets.slice(); return; }
+  newBets.forEach((b,i)=>{
+    if(i!==myGameSeat && b!==null && _prevBets[i]===null) playKnock();
+  });
+  _prevBets = newBets.slice();
+}
+
+// Track bird holder to detect token win
+let _prevBirdHolder = -99;
+function checkBirdChange(holder){
+  if(_prevBirdHolder===-99){ _prevBirdHolder=holder; return; }
+  if(holder!==null && holder!==_prevBirdHolder) playTweet();
+  _prevBirdHolder = holder;
+}
+
+// Unlock audio on first interaction
+let _audioUnlocked = false;
+function unlockAudio(){
+  if(_audioUnlocked) return;
+  _audioUnlocked = true;
+  getCtx();
+}
+document.addEventListener('pointerdown', unlockAudio, {once:true});
+
 // Image load helpers — called via inline onload/onerror (avoids quote-escaping issues)
 function capImgOk(img){ img.nextElementSibling.classList.add('hidden'); }
 function capImgErr(img){ img.style.display='none'; img.nextElementSibling.classList.remove('hidden'); }
@@ -929,6 +1043,10 @@ function handleMsg(msg){
     case 'PLAYER_LEFT':   waitLobby=msg.lobby; notif('Um jogador saiu.'); if(document.getElementById('screen-wait').classList.contains('active')) send({type:'REQUEST_STATE'}); break;
     case 'GAME_STATE':
       state=msg.state; myGameSeat=state.mySeat; isSolo=state.isSolo;
+      checkNewBets(state.betsPlaced);
+      checkBirdChange(state.birdHolder);
+      if(state.phase==='BETTING') startAmbient();
+      if(state.phase==='GAME_OVER') stopAmbient();
       closeOverlay('overlay-gameover'); showScreen('screen-game'); renderGame();
       if(state.phase==='GAME_OVER') showGameOver();
       break;
@@ -1047,7 +1165,7 @@ function renderGame(){
       '</div>'+extra;
 
     if(state.phase==='BETTING'&&state.myBet===null){
-      div.onclick=()=>{ send({type:'BET',position:pos}); state.myBet=pos; renderGame(); };
+      div.onclick=()=>{ playDuck(); send({type:'BET',position:pos}); state.myBet=pos; renderGame(); };
     }
     area.appendChild(div);
   });
@@ -1070,18 +1188,35 @@ function renderGame(){
   /* my scored */
   const sc=document.getElementById('my-scored'); sc.innerHTML='';
   const me=state.players[myGameSeat];
-  if(!me||me.scored.length===0){ sc.innerHTML='<div style="color:var(--muted);font-size:.82rem">Ainda sem cartas recolhidas.</div>'; }
-  else me.scored.forEach(c=>{
-    const d=document.createElement('div'); d.className='mini-card';
-    const ls=c.lilies.map(l=>'<span style="color:'+LC[l]+'" title="'+LL[l]+'">&#9679;</span>').join('');
-    d.innerHTML=c.cap+'x capivar.'+(c.lilies.length?' '+ls:'')+(c.bird?' <img src="/bird.png" class="bird-pip" alt="Passaro">':'');
-    sc.appendChild(d);
+  if(!me||me.scored.length===0){
+    const empty=document.createElement('div'); empty.style.cssText='color:var(--muted);font-size:.82rem;padding:4px 0';
+    empty.textContent='Ainda sem cartas recolhidas.'; sc.appendChild(empty);
+  } else me.scored.forEach(mc=>{
+    const wrap=document.createElement('div'); wrap.className='mini-card';
+    // art
+    const artImg=document.createElement('img'); artImg.className='mini-card-art';
+    artImg.src='/cards/'+mc.img+'.png'; artImg.alt='';
+    artImg.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };
+    const artFb=document.createElement('div'); artFb.className='mini-card-art fallback'; artFb.style.display='none'; artFb.textContent=mc.cap;
+    wrap.appendChild(artImg); wrap.appendChild(artFb);
+    // label
+    const lbl=document.createElement('div'); lbl.className='mini-card-label';
+    const capWord=mc.cap===1?'capivara':'capivaras';
+    lbl.textContent=mc.cap+' '+capWord;
+    if(mc.lilies.length||mc.bird){
+      const badges=document.createElement('div'); badges.className='mini-card-badges';
+      mc.lilies.forEach(l=>{ const s=document.createElement('span'); s.className='mini-lily lily-'+l; s.textContent=LL[l]; badges.appendChild(s); });
+      if(mc.bird){ const b=document.createElement('span'); b.className='mini-lily lily-bird'; b.textContent='Passaro'; badges.appendChild(b); }
+      lbl.appendChild(badges);
+    }
+    wrap.appendChild(lbl);
+    sc.appendChild(wrap);
   });
 
   /* bird token */
   const bt=document.getElementById('bird-token-display');
-  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip" alt=""> Passaro — sem detentor'; bt.className='bird-token'; }
-  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
+  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> Passaro — sem detentor'; bt.className='bird-token'; }
+  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
 
   /* deck */
   document.getElementById('deck-info').textContent=
@@ -1119,9 +1254,9 @@ document.getElementById('btn-go').onclick=()=>{
 document.getElementById('btn-back-name').onclick=()=>showScreen('screen-name');
 document.getElementById('btn-start').onclick=()=>{ document.getElementById('btn-start').disabled=true; send({type:'START'}); };
 document.getElementById('btn-leave-wait').onclick=()=>{ send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; myLobbyId=''; myLobbySeat=-1; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
-document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
+document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ stopAmbient(); _prevBets=null; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
 document.getElementById('btn-restart').onclick=()=>{ closeOverlay('overlay-gameover'); send({type:'RESTART'}); };
-document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
+document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); stopAmbient(); _prevBets=null; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
 
 if(sessionStorage.getItem('cap_token')) connect();
 </script>
