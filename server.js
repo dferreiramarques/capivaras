@@ -696,12 +696,13 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 /* ── TABLE ── */
 .table-area  { width: 100%; max-width: 100%; margin-bottom: 10px; }
 .table-label { font-size: .7rem; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.table-cards { display: grid; gap: 10px; grid-template-columns: repeat(var(--n-cards,3), 1fr); }
+.table-cards { display: grid; gap: 10px; grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)))); justify-content: center; }
 
 /* ── THE CARD ── */
 .cap-card {
   min-width: 0;
-  max-width: 100%;
+  max-width: 300px;
+  width: 100%;
   border-radius: 14px; border: 2px solid var(--border2);
   cursor: pointer; transition: all .18s;
   position: relative; overflow: hidden;
@@ -724,7 +725,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .cap-card.reveal-card { cursor: default; }
 
 /* Art */
-.card-art-wrap { width: 100%; aspect-ratio: 300/420; max-height: 420px; position: relative; overflow: hidden; background: #f0f8f5; }
+.card-art-wrap { width: 100%; aspect-ratio: 300/420; position: relative; overflow: hidden; background: #f0f8f5; }
 .card-art { width: 100%; height: 100%; object-fit: cover; display: block; }
 .card-art-fallback {
   position: absolute; inset: 0;
@@ -1223,9 +1224,13 @@ function handleMsg(msg){
   }
 }
 
+// Cache latest lobby data so we can render immediately when screen-lobby opens
+let _cachedLobbies = [];
 function renderLobbyList(lobbies){
-  showScreen('screen-lobby');
-  const el=document.getElementById('lobby-list'); el.innerHTML='';
+  _cachedLobbies = lobbies;
+  // Only switch to lobby screen if user has already entered their name
+  if(myName) showScreen('screen-lobby');
+  const el=document.getElementById('lobby-list'); if(!el) return; el.innerHTML='';
   lobbies.forEach(l=>{
     const full=l.full||l.playing;
     const status=l.playing?'A jogar':(l.seated>0?l.seated+'/'+l.maxHuman+' jog.':'Vazia');
@@ -1453,6 +1458,7 @@ document.getElementById('btn-go').onclick=()=>{
   const n=document.getElementById('inp-name').value.trim();
   if(!n){ notif('Precisas de um nome!'); return; }
   myName=n.slice(0,20); showScreen('screen-lobby');
+  if(_cachedLobbies.length) renderLobbyList(_cachedLobbies);
   if(!ws||ws.readyState>1) connect(); else send({type:'LOBBIES'});
 };
 document.getElementById('btn-back-name').onclick=()=>showScreen('screen-name');
