@@ -764,6 +764,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .winner-badge { background: var(--gold); color: #3a2000; padding: 2px 9px; border-radius: 8px; font-size: .7rem; font-weight: 700; }
 .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
 
+
+.bird-pip   { width:18px; height:18px; object-fit:cover; border-radius:50%; vertical-align:middle; margin-right:2px; }
+.bird-count { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
+
 /* ── NOTIFICATION ── */
 #notif {
   position: fixed; top: 20px; right: 20px;
@@ -987,15 +991,31 @@ function renderGame(){
   state.players.forEach((p,i)=>{
     const chip=document.createElement('div');
     chip.className='player-chip'+(p.isMe?' me':'')+(p.hasBird?' bird':'');
-    // Lily dots with colour
-    const lilyDots=p.lilies.map(l=>'<span style="color:'+LC[l]+';font-size:.9em" title="Nenufar '+LL[l]+'">&#9679;</span>').join('');
-    const ls=p.lilies.length ? lilyDots : '<span style="opacity:.35">—</span>';
+
+    const nameDiv=document.createElement('div'); nameDiv.className='pname';
+    nameDiv.textContent=p.name;
+    if(p.isMe){ const tu=document.createElement('span'); tu.style.cssText='color:var(--amber);font-size:.58rem'; tu.textContent=' (tu)'; nameDiv.appendChild(tu); }
+    chip.appendChild(nameDiv);
+
+    const ptsDiv=document.createElement('div'); ptsDiv.className='ppts';
+    ptsDiv.textContent=p.pts;
+    const ptsSub=document.createElement('span'); ptsSub.style.cssText='font-size:.65rem;font-weight:400;color:var(--muted)'; ptsSub.textContent=' pts';
+    ptsDiv.appendChild(ptsSub); chip.appendChild(ptsDiv);
+
+    const lilDiv=document.createElement('div'); lilDiv.className='plilies';
+    if(p.lilies.length===0){ const dash=document.createElement('span'); dash.style.opacity='.35'; dash.textContent='—'; lilDiv.appendChild(dash); }
+    else p.lilies.forEach(l=>{ const s=document.createElement('span'); s.style.cssText='color:'+LC[l]+';font-size:.9em'; s.title='Nenufar '+LL[l]; s.textContent='●'; lilDiv.appendChild(s); });
+    if(p.birdCards>0){
+      const bc=document.createElement('span'); bc.className='bird-count'; bc.title='Cartas com passaro';
+      const bimg=document.createElement('img'); bimg.src='/bird.png'; bimg.className='bird-pip'; bimg.alt='';
+      bc.appendChild(bimg); bc.appendChild(document.createTextNode(p.birdCards));
+      lilDiv.appendChild(bc);
+    }
+    chip.appendChild(lilDiv);
+
     const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):'';
-    chip.innerHTML=
-      '<div class="pname">'+esc(p.name)+(p.isMe?' <span style="color:var(--amber);font-size:.58rem">(tu)</span>':'')+'</div>'+
-      '<div class="ppts">'+p.pts+'<span style="font-size:.65rem;font-weight:400;color:var(--muted)"> pts</span></div>'+
-      '<div class="plilies">'+ls+(p.birdCards>0?' <span style="color:#c4a000;font-size:.8rem" title="Cartas com passaro">&#9679;'+p.birdCards+'</span>':'')+'</div>'+
-      (bs?'<div class="pbet">'+bs+'</div>':'');
+    if(bs){ const bsDiv=document.createElement('div'); bsDiv.className='pbet'; bsDiv.textContent=bs; chip.appendChild(bsDiv); }
+
     bar.appendChild(chip);
   });
 
@@ -1054,14 +1074,14 @@ function renderGame(){
   else me.scored.forEach(c=>{
     const d=document.createElement('div'); d.className='mini-card';
     const ls=c.lilies.map(l=>'<span style="color:'+LC[l]+'" title="'+LL[l]+'">&#9679;</span>').join('');
-    d.innerHTML=c.cap+'x capivar.'+(c.lilies.length?' '+ls:'')+(c.bird?' <span style="color:#c4a000" title="Passaro">&#9679;</span>':'');
+    d.innerHTML=c.cap+'x capivar.'+(c.lilies.length?' '+ls:'')+(c.bird?' <img src="/bird.png" class="bird-pip" alt="Passaro">':'');
     sc.appendChild(d);
   });
 
   /* bird token */
   const bt=document.getElementById('bird-token-display');
-  if(state.birdHolder===null){ bt.textContent='Passaro — sem detentor'; bt.className='bird-token'; }
-  else { const h=state.players[state.birdHolder]; bt.textContent='Passaro — '+(h?h.name:'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
+  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip" alt=""> Passaro — sem detentor'; bt.className='bird-token'; }
+  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
 
   /* deck */
   document.getElementById('deck-info').textContent=
