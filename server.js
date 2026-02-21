@@ -400,6 +400,11 @@ function handleReconnect(ws, msg) {
   const lobby=lobbies[sess.lobbyId];
   if (!lobby) { sendTo(ws,{type:'RECONNECT_FAIL'}); return; }
   const {seat,name}=sess;
+  // Reject if seat already has a live connection (e.g. duplicate tab)
+  const existing=lobby.players[seat];
+  if (existing && existing!==ws && existing.readyState===1) {
+    sendTo(ws,{type:'RECONNECT_FAIL'}); return;
+  }
   clearTimeout(lobby.graceTimers[seat]); lobby.graceTimers[seat]=null;
   lobby.players[seat]=ws; lobby.names[seat]=name;
   const gs=lobby.seatMap?lobby.seatMap.indexOf(seat):seat;
