@@ -42,8 +42,8 @@ function serveStatic(req, res) {
 //   cap2, cap2_B, cap2_bird, cap2_R_bird, cap2_W, cap2_Y, cap2_Y_bird
 //   cap3, cap3_B, cap3_bird, cap3_Y
 //   cap4, cap4_bird
-//   cap5
-// Missing: cap5_bird → falls back to cap5 image
+//   cap5, cap5_bird
+// All 17 PNGs confirmed present
 function mkCard(cap, lilies, bird, imgOverride) {
   const l = [...lilies].sort().join('');
   const img = imgOverride || ('cap' + cap + (l ? '_' + l : '') + (bird ? '_bird' : ''));
@@ -76,7 +76,7 @@ const BASE_DECK = [
   mkCard(4,[],true), mkCard(4,[],true),            // img: cap4_bird
   // 5 cap (2)
   mkCard(5,[],false),
-  mkCard(5,[],true,'cap5'),                        // cap5_bird missing → reuse cap5 art
+  mkCard(5,[],true),                               // img: cap5_bird
 ]; // 36 total
 
 function shuffle(a) {
@@ -1052,7 +1052,6 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     </div>
   </div>
 </div>
-<p style="width:100%;max-width:1000px;margin:0 auto;text-align:center;padding:10px 0 18px;font-size:.72rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic">Um jogo de David Marques · <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
 <!-- GAME OVER -->
 <div class="overlay" id="overlay-gameover">
   <div class="modal">
