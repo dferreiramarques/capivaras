@@ -5,6 +5,81 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const zlib = require('zlib');
+
+// ─── SPLASH PNG GENERATOR ────────────────────────────────────────────────────
+// Generates a gradient PNG (creme→mint, same as game bg) purely in Node.
+// Used for iOS PWA splash screens — no extra files needed.
+function makeSplashPNG(w, h) {
+  // Gradient: top #f8f2e2 (creme) → bottom #b8e8e0 (mint)
+  const topR=0xf8,topG=0xf2,topB=0xe2;
+  const botR=0xb8,botG=0xe8,botB=0xe0;
+
+  // Build raw scanlines: filter_byte(0) + RGB pixels
+  const scanlines = Buffer.alloc(h * (1 + w * 3));
+  for (let y = 0; y < h; y++) {
+    const t = y / (h - 1);
+    const r = Math.round(topR + (botR - topR) * t);
+    const g = Math.round(topG + (botG - topG) * t);
+    const b = Math.round(topB + (botB - topB) * t);
+    const row = y * (1 + w * 3);
+    scanlines[row] = 0; // filter: None
+    for (let x = 0; x < w; x++) {
+      scanlines[row + 1 + x * 3]     = r;
+      scanlines[row + 1 + x * 3 + 1] = g;
+      scanlines[row + 1 + x * 3 + 2] = b;
+    }
+  }
+
+  const idat = zlib.deflateSync(scanlines, { level: 6 });
+
+  function crc32(buf) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) {
+      c ^= buf[i];
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function chunk(type, data) {
+    const t = Buffer.from(type, 'ascii');
+    const d = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    const len = Buffer.alloc(4); len.writeUInt32BE(d.length);
+    const body = Buffer.concat([t, d]);
+    const c = Buffer.alloc(4); c.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, c]);
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
+  ihdr[8]=8; ihdr[9]=2; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0; // 8-bit RGB
+
+  return Buffer.concat([
+    Buffer.from([137,80,78,71,13,10,26,10]), // PNG signature
+    chunk('IHDR', ihdr),
+    chunk('IDAT', idat),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+// Pre-generate splash images for common iOS screen sizes (cached in memory)
+const SPLASH_SIZES = [
+  [1290, 2796], // iPhone 14 Pro Max / 15 Pro Max
+  [1179, 2556], // iPhone 14 Pro / 15 Pro
+  [1170, 2532], // iPhone 12/13/14
+  [1125, 2436], // iPhone X/XS/11 Pro
+  [828,  1792], // iPhone XR/11
+  [750,  1334], // iPhone 8/SE2
+  [2048, 2732], // iPad Pro 12.9"
+  [1668, 2388], // iPad Pro 11"
+];
+const splashCache = {};
+function getSplash(w, h) {
+  const key = w + 'x' + h;
+  if (!splashCache[key]) splashCache[key] = makeSplashPNG(w, h);
+  return splashCache[key];
+}
+
 const PORT        = process.env.PORT || 3000;
 const GRACE_MS    = 45_000;
 const REVEAL_MS   = 5_000;
@@ -42,8 +117,8 @@ function serveStatic(req, res) {
 //   cap2, cap2_B, cap2_bird, cap2_R_bird, cap2_W, cap2_Y, cap2_Y_bird
 //   cap3, cap3_B, cap3_bird, cap3_Y
 //   cap4, cap4_bird
-//   cap5, cap5_bird
-// All 17 PNGs confirmed present
+//   cap5
+// Missing: cap5_bird → falls back to cap5 image
 function mkCard(cap, lilies, bird, imgOverride) {
   const l = [...lilies].sort().join('');
   const img = imgOverride || ('cap' + cap + (l ? '_' + l : '') + (bird ? '_bird' : ''));
@@ -432,8 +507,10 @@ const MANIFEST = `{
   "theme_color": "#c47c28",
   "orientation": "any",
   "icons": [
-    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }`;
 const SW = "self.addEventListener('fetch', e => {\n  // network-first: serve fresh if online, nothing cached\n});";
@@ -443,6 +520,14 @@ const server = http.createServer((req, res) => {
   if (url === '/' || url === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(CLIENT_HTML);
+  } else if (url.startsWith('/splash/')) {
+    // /splash/WxH.png  e.g. /splash/1170x2532.png
+    const m = url.match(/\/splash\/(\d+)x(\d+)\.png/);
+    if (m) {
+      const png = getSplash(parseInt(m[1]), parseInt(m[2]));
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public,max-age=86400' });
+      res.end(png);
+    } else { res.writeHead(404); res.end(); }
   } else if (url === '/manifest.webmanifest' || url === '/manifest.json') {
     res.writeHead(200, { 'Content-Type': 'application/manifest+json' });
     res.end(MANIFEST);
@@ -502,6 +587,14 @@ const CLIENT_HTML = `<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Capivaras">
 <link rel="apple-touch-icon" href="/bird.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3)" href="/splash/1290x2796.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3)" href="/splash/1179x2556.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3)" href="/splash/1170x2532.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3)" href="/splash/1125x2436.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2)" href="/splash/828x1792.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2)" href="/splash/750x1334.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2)" href="/splash/2048x2732.png">
+<link rel="apple-touch-startup-image" media="screen and (device-width:834px) and (device-height:1194px) and (-webkit-device-pixel-ratio:2)" href="/splash/1668x2388.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
