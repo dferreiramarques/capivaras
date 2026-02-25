@@ -275,6 +275,7 @@ function resolveRound(lobby) {
   const result = { bets: [...g.bets], winners: {},
     cards: g.table.map(c => ({ ...c, lilies: [...c.lilies] })), birdUpdate: null };
 
+  // First pass: resolve card wins and accumulate bird cards
   g.table.forEach((card, pos) => {
     if (betCount[pos] === 1) {
       const seat = betBySeat[pos];
@@ -282,18 +283,42 @@ function resolveRound(lobby) {
       result.winners[pos] = seat;
       if (card.bird) {
         g.players[seat].birdCards++;
-        const prev = g.birdHolder;
-        if (prev === null) {
-          g.birdHolder = seat;
-          result.birdUpdate = { type: 'first', seat, name: g.players[seat].name };
-        } else if (seat !== prev && g.players[seat].birdCards > g.players[prev].birdCards) {
-          g.birdHolder = seat;
-          result.birdUpdate = { type: 'steal', seat, from: prev,
-            name: g.players[seat].name, fromName: g.players[prev].name };
-        }
       }
     }
   });
+
+  // Second pass: resolve bird token with tie-breaking
+  // Rule: in case of a tie (multiple players with equal claim), token doesn't move
+  const prev = g.birdHolder;
+  if (prev === null) {
+    // First acquisition: find all players who gained a bird card this round
+    const birdWinners = Object.entries(result.winners)
+      .filter(([pos]) => g.table[pos].bird)
+      .map(([, seat]) => seat);
+    if (birdWinners.length === 1) {
+      g.birdHolder = birdWinners[0];
+      result.birdUpdate = { type: 'first', seat: birdWinners[0], name: g.players[birdWinners[0]].name };
+    } else if (birdWinners.length > 1) {
+      // Tie on first acquisition — token stays on table (null)
+      result.birdUpdate = { type: 'tie_first', seats: birdWinners, names: birdWinners.map(s => g.players[s].name) };
+    }
+  } else {
+    // Steal check: find all non-holders who now exceed the holder's count
+    const holderCount = g.players[prev].birdCards;
+    const stealCandidates = g.players.reduce((acc, p, i) => {
+      if (i !== prev && p.birdCards > holderCount) acc.push(i);
+      return acc;
+    }, []);
+    if (stealCandidates.length === 1) {
+      const thief = stealCandidates[0];
+      g.birdHolder = thief;
+      result.birdUpdate = { type: 'steal', seat: thief, from: prev,
+        name: g.players[thief].name, fromName: g.players[prev].name };
+    } else if (stealCandidates.length > 1) {
+      // Tie on steal — token stays with current holder
+      result.birdUpdate = { type: 'tie_steal', seats: stealCandidates, names: stealCandidates.map(s => g.players[s].name) };
+    }
+  }
 
   g.discard.push(...g.table.map(c => ({ ...c, lilies: [...c.lilies] })));
   g.lastResult = result; g.phase = 'REVEAL'; g.turnGen++;
@@ -1440,7 +1465,7 @@ function renderGame(){
   } else if(state.phase==='REVEAL'){
     badge.textContent='Revelacao'; cnt.textContent='';
     const bu=state.lastResult&&state.lastResult.birdUpdate;
-    if(bu) text.textContent=bu.type==='first'?bu.name+' recebeu o token do passaro!':bu.name+' destronoupção '+bu.fromName+' e ficou com o token!';
+    if(bu){if(bu.type==='first')text.textContent=bu.name+' recebeu o token do pássaro!';else if(bu.type==='steal')text.textContent=bu.name+' destronou '+bu.fromName+' e ficou com o token!';else if(bu.type==='tie_first')text.textContent='Empate! Ninguém ficou com o token do pássaro.';else if(bu.type==='tie_steal')text.textContent='Empate! O token do pássaro mantém-se com o detentor atual.';}
     else { const w=Object.keys((state.lastResult&&state.lastResult.winners)||{}).length; text.textContent=w>0?w+' carta'+(w!==1?'s':'')+' recolhida'+(w!==1?'s':'')+'!':'Ninguem ganhou — todos empataram!'; }
   } else { badge.textContent='Fim do Jogo'; text.textContent='A contabilizar pontos...'; cnt.textContent=''; }
 
