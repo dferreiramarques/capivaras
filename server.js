@@ -950,7 +950,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 }
 .score-row:last-child { border: none; }
 .score-name   { font-weight: 700; color: var(--ink); }
-.score-pts    { font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 900; color: var(--amber); }
+.score-pts    { font-family: 'Fraunces', serif; font-size: 1.1rem; font-weight: 900; color: var(--amber); white-space: nowrap; }
 .score-detail { font-size: .74rem; color: var(--muted); }
 .winner-badge { background: var(--gold); color: #3a2000; padding: 2px 9px; border-radius: 8px; font-size: .7rem; font-weight: 700; }
 .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
