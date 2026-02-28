@@ -1203,8 +1203,8 @@ function notif(t,d=3200){ const e=document.getElementById('notif'); e.textConten
 function cardArtHTML(card){
   const src='/cards/'+card.img+'.png';
   return '<div class="card-art-wrap">'+
-    '<img class="card-art" src="'+src+'" alt="" onload="capImgOk(this)" onerror="capImgErr(this)">'+
-    '<div class="card-art-fallback">'+card.cap+'</div>'+
+    '<img class="card-art" src="'+src+'" alt="" onerror="capImgErr(this)">'+
+    '<div class="card-art-fallback hidden">'+card.cap+'</div>'+
   '</div>';
 }
 
