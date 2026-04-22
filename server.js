@@ -1039,6 +1039,18 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   .bird-token     { font-size: .6rem; padding: 2px 5px; gap: 3px; }
   .deck-info      { display: none; }
 }
+
+/* ── AMBIENT PLAYER ── */
+.ambient-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--card-bg); border: 1.5px solid var(--border2);
+  border-radius: 20px; padding: 4px 10px 4px 7px;
+  font-size: .7rem; color: var(--ink2); cursor: pointer;
+  white-space: nowrap; transition: background .15s;
+  font-family: 'Nunito', sans-serif; font-weight: 600;
+}
+.ambient-btn:hover { background: #e8f5f3; }
+.ambient-btn .amb-icon { font-size: .95rem; line-height: 1; }
 </style>
 </head>
 <body>
@@ -1103,8 +1115,13 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   <div class="game-header">
     <div class="header-left">
       <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
+      <div class="deck-info" id="deck-info">—</div>
     </div>
-    <div class="deck-info" id="deck-info">—</div>
+    <audio id="ambient-audio" src="/ambient.mp3" loop preload="auto"></audio>
+    <button class="ambient-btn" id="ambient-btn" onclick="toggleAmbient()" title="Música ambiente">
+      <span class="amb-icon" id="amb-icon">🔇</span>
+      <span id="amb-label">Som</span>
+    </button>
     <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
   </div>
   <div class="players-bar" id="players-bar"></div>
@@ -1320,7 +1337,7 @@ function handleMsg(msg){
       state=msg.state; myGameSeat=state.mySeat; isSolo=state.isSolo;
       checkNewBets(state.betsPlaced);
       checkBirdChange(state.birdHolder);
-      closeOverlay('overlay-gameover'); showScreen('screen-game'); renderGame();
+      closeOverlay('overlay-gameover'); showScreen('screen-game'); renderGame(); startAmbient();
       if(state.phase==='GAME_OVER') showGameOver();
       break;
     case 'RECONNECTED':
@@ -1581,6 +1598,36 @@ document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-ga
 
 if(sessionStorage.getItem('cap_token')) connect();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+
+// ── Ambient audio ────────────────────────────────────────
+let ambientPlaying=false;
+const ambEl=()=>document.getElementById('ambient-audio');
+
+function setAmbientUI(playing){
+  ambientPlaying=playing;
+  const icon=document.getElementById('amb-icon');
+  const lbl=document.getElementById('amb-label');
+  if(icon) icon.textContent=playing?'🔊':'🔇';
+  if(lbl)  lbl.textContent=playing?'Som':'Som';
+}
+
+function startAmbient(){
+  const a=ambEl(); if(!a||ambientPlaying) return;
+  a.volume=0.35;
+  a.play().then(()=>setAmbientUI(true)).catch(()=>setAmbientUI(false));
+}
+
+function toggleAmbient(){
+  const a=ambEl(); if(!a) return;
+  if(ambientPlaying){ a.pause(); setAmbientUI(false); }
+  else { startAmbient(); }
+}
+
+// Stop when leaving game
+document.getElementById('btn-leave-game').addEventListener('click',()=>{
+  const a=ambEl(); if(a){a.pause();a.currentTime=0;} setAmbientUI(false);
+});
+
 </script>
 </body>
 </html>`;
