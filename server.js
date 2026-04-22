@@ -1,1635 +1,456 @@
 'use strict';
 const http = require('http');
+const { WebSocketServer } = require('ws');
 const fs   = require('fs');
 const path = require('path');
-const { WebSocketServer } = require('ws');
 
-// ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const zlib = require('zlib');
+const PORT    = process.env.PORT || 3000;
+const PUB_DIR = path.join(__dirname, 'public');
 
-// ─── SPLASH PNG GENERATOR ────────────────────────────────────────────────────
-// Generates a gradient PNG (creme→mint, same as game bg) purely in Node.
-// Used for iOS PWA splash screens — no extra files needed.
-function makeSplashPNG(w, h) {
-  // Gradient: top #f8f2e2 (creme) → bottom #b8e8e0 (mint)
-  const topR=0xf8,topG=0xf2,topB=0xe2;
-  const botR=0xb8,botG=0xe8,botB=0xe0;
+// ═══════════════════════════════════════════════════════════════
+// CATANIA — Game Logic
+// Resources: cereais, vinho, peixe, calcario, azeite
+// Village rule: keep majority; ONE minority raises tower value
+// Min 5 cards in hand to found a village
+// ═══════════════════════════════════════════════════════════════
+const CAT_RES = ['cereais','vinho','peixe','calcario','azeite'];
+const CAT_PT  = {cereais:'Cereais',vinho:'Vinho',peixe:'Peixe',calcario:'Calcário',azeite:'Azeite'};
 
-  // Build raw scanlines: filter_byte(0) + RGB pixels
-  const scanlines = Buffer.alloc(h * (1 + w * 3));
-  for (let y = 0; y < h; y++) {
-    const t = y / (h - 1);
-    const r = Math.round(topR + (botR - topR) * t);
-    const g = Math.round(topG + (botG - topG) * t);
-    const b = Math.round(topB + (botB - topB) * t);
-    const row = y * (1 + w * 3);
-    scanlines[row] = 0; // filter: None
-    for (let x = 0; x < w; x++) {
-      scanlines[row + 1 + x * 3]     = r;
-      scanlines[row + 1 + x * 3 + 1] = g;
-      scanlines[row + 1 + x * 3 + 2] = b;
-    }
-  }
+const BLACK_DISCS = [12,11,11,10,10,8,8,6,6,4,4,2,2];
+const RED_DISCS   = [9,7,5,3,1];
+const RED_SET     = new Set(RED_DISCS);
 
-  const idat = zlib.deflateSync(scanlines, { level: 6 });
-
-  function crc32(buf) {
-    let c = 0xFFFFFFFF;
-    for (let i = 0; i < buf.length; i++) {
-      c ^= buf[i];
-      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    }
-    return (c ^ 0xFFFFFFFF) >>> 0;
-  }
-  function chunk(type, data) {
-    const t = Buffer.from(type, 'ascii');
-    const d = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    const len = Buffer.alloc(4); len.writeUInt32BE(d.length);
-    const body = Buffer.concat([t, d]);
-    const c = Buffer.alloc(4); c.writeUInt32BE(crc32(body));
-    return Buffer.concat([len, body, c]);
-  }
-
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
-  ihdr[8]=8; ihdr[9]=2; ihdr[10]=0; ihdr[11]=0; ihdr[12]=0; // 8-bit RGB
-
-  return Buffer.concat([
-    Buffer.from([137,80,78,71,13,10,26,10]), // PNG signature
-    chunk('IHDR', ihdr),
-    chunk('IDAT', idat),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-// Pre-generate splash images for common iOS screen sizes (cached in memory)
-const SPLASH_SIZES = [
-  [1290, 2796], // iPhone 14 Pro Max / 15 Pro Max
-  [1179, 2556], // iPhone 14 Pro / 15 Pro
-  [1170, 2532], // iPhone 12/13/14
-  [1125, 2436], // iPhone X/XS/11 Pro
-  [828,  1792], // iPhone XR/11
-  [750,  1334], // iPhone 8/SE2
-  [2048, 2732], // iPad Pro 12.9"
-  [1668, 2388], // iPad Pro 11"
+const R = 62, W3 = Math.sqrt(3) * 62;
+const CAT_LAYOUT = [
+  {row:0,count:2,colStart:1},{row:1,count:4,colStart:0},
+  {row:2,count:3,colStart:0},{row:3,count:2,colStart:1}
 ];
-const splashCache = {};
-function getSplash(w, h) {
-  const key = w + 'x' + h;
-  if (!splashCache[key]) splashCache[key] = makeSplashPNG(w, h);
-  return splashCache[key];
+
+function catShuf(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function h2p(col,row){return{x:W3*col+(row&1?W3/2:0),y:R*1.5*row};}
+
+function catMkTower(){
+  const all=[...BLACK_DISCS,...RED_DISCS];all.sort((a,b)=>a-b);return all;
 }
 
-const PORT        = process.env.PORT || 3000;
-const GRACE_MS    = 45_000;
-const REVEAL_MS   = 5_000;
-const BOT_MIN_MS  = 900;
-const BOT_MAX_MS  = 2_600;
-const AUTODEAL_MS = 10_000;
-
-// ─── STATIC FILE SERVER ──────────────────────────────────────────────────────
-const MIME = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif',
-  '.mp4': 'video/mp4', '.mp3': 'audio/mpeg',
-  '.webmanifest': 'application/manifest+json', '.json': 'application/json',
-  '.js': 'application/javascript',
-};
-
-function serveStatic(req, res) {
-  const safe = path.normalize(req.url).replace(/^(\.\.[\/\\])+/, '');
-  const file = path.join(__dirname, 'public', safe.replace(/^\//, ''));
-  const ext  = path.extname(file).toLowerCase();
-  const mime = MIME[ext];
-  if (!mime) { res.writeHead(404); res.end(); return; }
-  fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public,max-age=86400' });
-    res.end(data);
+function catBuildHexes(){
+  const pool=[];CAT_RES.forEach(r=>pool.push(r,r));catShuf(pool);
+  const hexes=[];let id=0,ri=0;
+  CAT_LAYOUT.forEach(({row,count,colStart})=>{
+    for(let ci=0;ci<count;ci++){
+      const col=colStart+ci,isVol=(row===1&&ci===1);
+      hexes.push({id:id++,row,col,ci,type:isVol?'vulcao':pool[ri++],px:h2p(col,row),tokens:[]});
+    }
   });
+  return hexes;
 }
 
-// ─── DECK ────────────────────────────────────────────────────────────────────
-// img: PNG filename without extension, served from /public/cards/
-// imgFallback: shown if img.png is missing (use plain card of same cap count)
-// Available PNGs (confirmed by artist):
-//   cap1, cap1_BW, cap1_R, cap1_W_bird
-//   cap2, cap2_B, cap2_bird, cap2_R_bird, cap2_W, cap2_Y, cap2_Y_bird
-//   cap3, cap3_B, cap3_bird, cap3_Y
-//   cap4, cap4_bird
-//   cap5
-// Missing: cap5_bird → falls back to cap5 image
-function mkCard(cap, lilies, bird, imgOverride) {
-  const l = [...lilies].sort().join('');
-  const img = imgOverride || ('cap' + cap + (l ? '_' + l : '') + (bird ? '_bird' : ''));
-  const fallback = 'cap' + cap; // plain version always exists
-  return { cap, lilies, bird, img, fallback };
+function catNeighbors(hexId,hexes){
+  const h=hexes.find(x=>x.id===hexId);if(!h)return[];
+  const thr=W3*1.2;
+  return hexes.filter(x=>x.id!==hexId).filter(x=>{const dx=x.px.x-h.px.x,dy=x.px.y-h.px.y;return Math.sqrt(dx*dx+dy*dy)<thr;}).map(x=>x.id);
 }
 
-const BASE_DECK = [
-  // 1 cap (6)
-  mkCard(1,[],false),  mkCard(1,[],false),
-  mkCard(1,['R'],false), mkCard(1,['R'],false),
-  mkCard(1,['B','W'],false),                      // img: cap1_BW
-  mkCard(1,['W'],true),                            // img: cap1_W_bird
-  // 2 cap (13)
-  mkCard(2,[],false), mkCard(2,[],false), mkCard(2,[],false),
-  mkCard(2,[],false), mkCard(2,[],false), mkCard(2,[],false),
-  mkCard(2,['Y'],false), mkCard(2,['Y'],false),
-  mkCard(2,['B'],false),                           // img: cap2_B  (artist changed W→B)
-  mkCard(2,['Y'],true),                            // img: cap2_Y_bird
-  mkCard(2,['R'],true),                            // img: cap2_R_bird
-  mkCard(2,[],true), mkCard(2,[],true),            // img: cap2_bird
-  // 3 cap (11)
-  mkCard(3,[],false), mkCard(3,[],false), mkCard(3,[],false),
-  mkCard(3,[],false), mkCard(3,[],false), mkCard(3,[],false),
-  mkCard(3,['Y'],false),                           // img: cap3_Y
-  mkCard(3,['B'],false), mkCard(3,['B'],false),    // img: cap3_B
-  mkCard(3,[],true), mkCard(3,[],true),            // img: cap3_bird
-  // 4 cap (4)
-  mkCard(4,[],false), mkCard(4,[],false),
-  mkCard(4,[],true), mkCard(4,[],true),            // img: cap4_bird
-  // 5 cap (2)
-  mkCard(5,[],false),
-  mkCard(5,[],true),                               // img: cap5_bird
-]; // 36 total
-
-function shuffle(a) {
-  const b = [...a];
-  for (let i = b.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [b[i], b[j]] = [b[j], b[i]];
+function catTrimHexes(hexes, n){
+  // n = number of hexes to remove
+  // Rule: only remove a hex if that resource still has ≥2 hexes after removal
+  const removable=hexes.filter(h=>h.type!=='vulcao');
+  catShuf(removable);
+  let removed=0;
+  for(const h of removable){
+    if(removed>=n)break;
+    const remaining=hexes.filter(x=>x.id!==h.id&&x.type===h.type);
+    if(remaining.length>=1){ // keeps at least 1 of this type
+      const i=hexes.indexOf(h);
+      hexes.splice(i,1);
+      removed++;
+    }
   }
-  return b;
+  return hexes;
 }
 
-// ─── SERVER STATE ────────────────────────────────────────────────────────────
-const lobbies = {};
-const wsState = new WeakMap();
-const sessions = {};
-
-function makeLobby(id, name, solo, maxHuman) {
-  const n = solo ? 1 : maxHuman;
-  return { id, name, solo, maxHuman,
-    players: new Array(n).fill(null), names: new Array(n).fill(''),
-    tokens:  new Array(n).fill(null), graceTimers: new Array(n).fill(null),
-    autoTimers: new Array(n).fill(null), seatMap: null, game: null };
-}
-
-function initLobbies() {
-  for (let i = 1; i <= 5; i++) lobbies['mp'+i] = makeLobby('mp'+i, 'Mesa '+i, false, 6);
-  lobbies['solo'] = makeLobby('solo', 'Mesa Solo (vs 2 IAs)', true, 1);
-}
-initLobbies();
-
-// ─── GAME LOGIC ───────────────────────────────────────────────────────────────
-function newGame(names, isSolo) {
-  const n = names.length;
-  const deck = shuffle(BASE_DECK);
-  return {
-    players: names.map(name => ({ name, scored: [], birdCards: 0 })),
-    n, deck, discard: [], table: deck.splice(0, n),
-    bets: new Array(n).fill(null), birdHolder: null,
-    phase: 'BETTING', deckPass: 0, lastResult: null,
-    isSolo, turnGen: 0, winnerIdx: null, finalScores: null,
+function catNewGame(players){
+  const tower=catMkTower();let hexes=catBuildHexes();
+  const np=players.length;
+  if(np===2)hexes=catTrimHexes(hexes,2);
+  else if(np===3)hexes=catTrimHexes(hexes,1);
+  const drawn=[];for(let i=0;i<5;i++)drawn.push(tower.pop());catShuf(drawn);
+  const piles={};CAT_RES.forEach((r,i)=>{piles[r]={discs:[drawn[i]],totalCollected:0};});
+  return{
+    n:players.length,
+    players:players.map((lp,idx)=>{
+      const hand={},collected={};CAT_RES.forEach(r=>{hand[r]=0;collected[r]=0;});
+      return{name:lp.name,isBot:!!lp.isBot,colorIdx:idx,hand,collected,villages:[],score:0,
+        turn:{collects:0,foundDone:false,sicelPending:false,thisHexes:[]}};
+    }),
+    hexes,tower,piles,
+    sicel:hexes.find(h=>h.type==='vulcao').id,
+    cur:0,round:1,phase:'ACTION',trigP:null,log:[],
   };
 }
 
-function computeScores(g) {
-  return g.players.map((p, i) => {
-    let pts = 0;
-    const lilies = new Set();
-    for (const c of p.scored) { pts += c.cap; c.lilies.forEach(l => lilies.add(l)); }
-    if (i === g.birdHolder) pts += 5;
-    const allLilies = ['Y','R','W','B'].every(c => lilies.has(c));
-    if (allLilies) pts += 10;
-    return { name: p.name, pts, scored: p.scored, lilies: [...lilies],
-             birdCards: p.birdCards, hasBird: i === g.birdHolder, allLilies };
-  });
+function catInitTurn(g,seat){
+  g.hexes.forEach(h=>{h.tokens=h.tokens.filter(pi=>pi!==seat);});
+  g.players[seat].turn={collects:0,foundDone:false,sicelPending:false,thisHexes:[]};
 }
 
-function buildView(g, seat) {
-  const sc = computeScores(g);
-  return {
-    phase: g.phase, n: g.n, table: g.table,
-    myBet: g.bets[seat], betsPlaced: g.bets.map(b => b !== null),
-    lastResult: g.lastResult ? {
-      winners:    g.lastResult.winners,
-      birdUpdate: g.lastResult.birdUpdate,
-      cards:      g.lastResult.cards,
-    } : null,
-    players: sc.map((s, i) => ({ ...s, isMe: i === seat, seat: i })),
-    birdHolder: g.birdHolder,
-    birdHolderCards: g.birdHolder !== null ? g.players[g.birdHolder].birdCards : 0,
-    deckPass: g.deckPass, deckLeft: g.deck.length,
-    winnerIdx: g.winnerIdx, finalScores: g.finalScores,
-    mySeat: seat, isSolo: g.isSolo,
-    myBirdCards: g.players[seat].birdCards, turnGen: g.turnGen,
+function catLog(g,msg){g.log.unshift(msg);if(g.log.length>20)g.log.pop();}
+
+function catHandle(g,seat,msg){
+  if(g.phase==='GAME_OVER')return{error:'Jogo terminado'};
+  const p=g.players[seat],t=p.turn;
+
+  if(msg.type==='CAT_COLLECT'){
+    if(g.cur!==seat)return{error:'Não é a tua vez'};
+    if(t.sicelPending)return{error:'Move os Sículos primeiro'};
+    if(t.collects>=2)return{error:'Já fizeste 2 recolhas'};
+    const hex=g.hexes[msg.hexIdx];
+    if(!hex||hex.type==='vulcao')return{error:'Hexágono inválido'};
+    if(g.sicel===hex.id)return{error:'Os Sículos bloqueiam esse território'};
+    if(hex.tokens.some(pi=>pi!==seat))return{error:'Território ocupado'};
+    if(t.thisHexes.includes(hex.id))return{error:'Já recolheste neste hex'};
+    if(msg.take2&&!g.tower.length)return{error:'Torre vazia'};
+    if(!hex.tokens.includes(seat))hex.tokens.push(seat);
+    t.thisHexes.push(hex.id);
+    const r=hex.type,amt=msg.take2?2:1;
+    p.hand[r]+=amt;p.collected[r]+=amt;g.piles[r].totalCollected+=amt;t.collects++;
+    if(msg.take2){
+      const nd=g.tower.pop(),isRed=RED_SET.has(nd);
+      g.piles[r].discs.push(nd); // push on top; original disc preserved below
+      catLog(g,`${p.name} recolheu 2 ${CAT_PT[r]} → disco ${nd}${isRed?' 🔴':''}`);
+      if(isRed){t.sicelPending=true;return{ok:true,needSicels:true};}
+    }else{catLog(g,`${p.name} recolheu 1 ${CAT_PT[r]}`);}
+    return{ok:true};
+  }
+
+  if(msg.type==='CAT_SICELS'){
+    if(g.cur!==seat||!t.sicelPending)return{error:'Fase incorrecta'};
+    if(msg.skip){
+      // No valid adjacent hex available — resolve without moving
+      t.sicelPending=false;catLog(g,'🔥 Fogo do Etna sem destino — fica no lugar.');
+      return{ok:true};
+    }
+    if(!catNeighbors(g.sicel,g.hexes).includes(msg.hexIdx))return{error:'Hex não é adjacente'};
+    const destHex=g.hexes.find(h=>h.id===msg.hexIdx);
+    if(destHex&&(destHex.tokens||[]).length>0)return{error:'Não podes mover os Sículos para um hex com tokens'};
+    g.sicel=msg.hexIdx;t.sicelPending=false;catLog(g,'🔥 Fogo do Etna moveu-se!');
+    return{ok:true};
+  }
+
+  if(msg.type==='CAT_VILLAGE'){
+    if(g.cur!==seat)return{error:'Não é a tua vez'};
+    if(t.collects<1)return{error:'Faz pelo menos 1 recolha'};
+    if(t.foundDone)return{error:'Já fundaste uma aldeia'};
+    const{keepRes,affectRes}=msg;
+    const types=CAT_RES.filter(r=>p.hand[r]>0);
+    const total=types.reduce((s,r)=>s+p.hand[r],0);
+    // Rule: ≥5 cards total + ≥2 types. Choose founding type + minority to sacrifice for tower boost.
+    if(total<5)return{error:'Precisas de pelo menos 5 cartas na mão'};
+    if(types.length<2)return{error:'Precisas de 2+ tipos de recursos'};
+    if(!keepRes||!(p.hand[keepRes]>0))return{error:'Tipo de fundação inválido'};
+    if(!affectRes||!(p.hand[affectRes]>0))return{error:'Escolhe um tipo de minoria para descartar'};
+    if(affectRes===keepRes)return{error:'A minoria tem de ser um tipo diferente'};
+    const keptCount=p.hand[keepRes];
+    const discardCount=p.hand[affectRes];
+    // Consume only the two selected types; rest of hand preserved
+    p.hand[keepRes]=0;
+    p.hand[affectRes]=0;
+    // Tower improvement: return top disc of minority pile to tower, exposing original value
+    const affPile=g.piles[affectRes];
+    if(affPile.discs.length>1){
+      // Has a collected disc on top — return it to tower
+      const returned=affPile.discs.pop();
+      g.tower.push(returned);
+      g.tower.sort((a,b)=>a-b);
+    }
+    // If only 1 disc (base), nothing to return — value already exposed
+    p.villages.push({res:keepRes,cards:keptCount});t.foundDone=true;
+    catLog(g,`🏘 ${p.name} fundou aldeia (${CAT_PT[keepRes]}×${keptCount}), afetou ${CAT_PT[affectRes]}`);
+    if(p.villages.length>=3&&g.phase==='ACTION'){
+      g.phase='LAST_ROUND';g.trigP=seat;
+      catLog(g,`🏛 ${p.name} fundou a 3ª aldeia! Última ronda!`);
+    }
+    return{ok:true};
+  }
+
+  if(msg.type==='CAT_END_TURN'){
+    if(g.cur!==seat)return{error:'Não é a tua vez'};
+    if(t.sicelPending)return{error:'Move os Sículos antes'};
+    if(t.collects<1)return{error:'Faz pelo menos 1 recolha'};
+    const next=(seat+1)%g.n;
+    if(g.phase==='LAST_ROUND'&&next===g.trigP){catEndGame(g);return{ok:true};}
+    g.cur=next;if(next===0)g.round++;
+    catInitTurn(g,next);return{ok:true};
+  }
+  return{error:'Ação desconhecida'};
+}
+
+function catEndGame(g){
+  g.phase='GAME_OVER';
+  g.players.forEach(p=>{
+    // Score = sum over founded villages: cards × current disc value of that resource
+    p.score=p.villages.reduce((s,v)=>{
+      const pile=g.piles[v.res];
+      const discVal=pile?pile.discs[pile.discs.length-1]:1;
+      return s+(v.cards*discVal);
+    },0);
+  });
+  catLog(g,'⚑ Jogo terminado!');
+}
+
+function catBot(g){
+  if(g.phase==='GAME_OVER')return null;
+  const seat=g.cur,p=g.players[seat];if(!p.isBot)return null;
+  const t=p.turn;
+  if(t.sicelPending){
+    const adj=catNeighbors(g.sicel,g.hexes);
+    // No tokens at all — any player's token blocks the move
+    const free=adj.filter(id=>{const h=g.hexes.find(x=>x.id===id);return h&&!(h.tokens||[]).length;});
+    const noHuman=adj.filter(id=>!g.hexes.find(h=>h.id===id)?.tokens.some(pi=>!g.players[pi].isBot)&&!(g.hexes.find(h=>h.id===id)?.tokens||[]).length);
+    const choices=free.length?free:(noHuman.length?noHuman:adj);
+    if(!choices.length){return{type:'CAT_SICELS',skip:true};}
+    return{type:'CAT_SICELS',hexIdx:choices[0|Math.random()*choices.length]};
+  }
+  if(t.collects<1||(t.collects<2&&Math.random()<0.6)){
+    const avail=g.hexes.filter(h=>h.type!=='vulcao'&&g.sicel!==h.id&&!h.tokens.some(pi=>pi!==seat)&&!t.thisHexes.includes(h.id));
+    if(avail.length){
+      avail.sort((a,b)=>{const da=g.piles[a.type]?.discs;const db=g.piles[b.type]?.discs;return (da?da[da.length-1]:99)-(db?db[db.length-1]:99);});
+      return{type:'CAT_COLLECT',hexIdx:avail[0].id,take2:g.tower.length>2&&Math.random()<0.38};
+    }
+  }
+  if(t.collects>=1&&!t.foundDone){
+    const types=CAT_RES.filter(r=>p.hand[r]>0);
+    const total=types.reduce((s,r)=>s+p.hand[r],0);
+    if(types.length>=2&&total>=5&&Math.random()<0.55){
+      // Pick the type with most cards to found; pick another as minority to discard
+      const sorted=types.slice().sort((a,b)=>p.hand[b]-p.hand[a]);
+      const keepRes=sorted[0];
+      // Pick minority: prefer type whose pile top disc is lowest (biggest gain from discard)
+      const others=sorted.slice(1);
+      const affectRes=others.sort((a,b)=>{
+        const da=g.piles[a]?.discs,db=g.piles[b]?.discs;
+        return (da?da[da.length-1]:0)-(db?db[db.length-1]:0);
+      })[0];
+      if(affectRes) return{type:'CAT_VILLAGE',keepRes,affectRes};
+    }
+  }
+  return{type:'CAT_END_TURN'};
+}
+
+function catView(g,seat){
+  const me=g.players[seat];
+  return{
+    n:g.n,cur:g.cur,myIdx:seat,round:g.round,phase:g.phase,
+    players:g.players.map((p,i)=>({
+      name:p.name,colorIdx:p.colorIdx,isBot:p.isBot,
+      handTotal:Object.values(p.hand).reduce((a,b)=>a+b,0),
+      villages:p.villages,score:p.score||0,
+      turn:i===seat?p.turn:null,
+    })),
+    myHand:me.hand,
+    allHands:g.players.map(p=>p.hand),
+    hexes:g.hexes.map(h=>({...h})),
+    piles:Object.fromEntries(CAT_RES.map(r=>[r,{
+      disc:g.piles[r].discs[g.piles[r].discs.length-1],
+      discs:g.piles[r].discs,
+      totalCollected:g.piles[r].totalCollected
+    }])),tower:g.tower,
+    sicel:g.sicel,sicelAdj:catNeighbors(g.sicel,g.hexes),
+    log:g.log,
   };
 }
 
-function sendTo(ws, msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
-
-function broadcastGame(lobby) {
-  const g = lobby.game; if (!g) return;
-  if (lobby.solo) {
-    sendTo(lobby.players[0], { type: 'GAME_STATE', state: buildView(g, 0) });
-  } else if (lobby.seatMap) {
-    lobby.seatMap.forEach((ls, gs) => {
-      if (lobby.players[ls]) sendTo(lobby.players[ls], { type: 'GAME_STATE', state: buildView(g, gs) });
-    });
-  }
-}
-
-function lobbyInfo(l) {
-  const seated = l.players.filter(Boolean).length;
-  const playing = !!l.game && l.game.phase !== 'GAME_OVER';
-  return { id: l.id, name: l.name, solo: l.solo, seated,
-           maxHuman: l.maxHuman, playing, full: seated >= l.maxHuman,
-           names: l.names.filter(Boolean) };
-}
-
-let wss;
-function broadcastLobbyList() {
-  const list = Object.values(lobbies).map(lobbyInfo);
-  for (const ws of wss.clients) {
-    if (ws.readyState !== 1) continue;
-    const st = wsState.get(ws);
-    if (!st || !st.lobbyId) sendTo(ws, { type: 'LOBBIES', lobbies: list });
-  }
-}
-
-// ─── ROUND ────────────────────────────────────────────────────────────────────
-function checkAllBetsIn(lobby) {
-  const g = lobby.game;
-  if (!g || g.phase !== 'BETTING') return;
-  if (g.bets.every(b => b !== null)) resolveRound(lobby);
-}
-
-function resolveRound(lobby) {
-  const g = lobby.game;
-  const betCount  = new Array(g.n).fill(0);
-  const betBySeat = new Array(g.n).fill(-1);
-  g.bets.forEach((bet, seat) => { if (bet !== null) { betCount[bet]++; betBySeat[bet] = seat; } });
-
-  const result = { bets: [...g.bets], winners: {},
-    cards: g.table.map(c => ({ ...c, lilies: [...c.lilies] })), birdUpdate: null };
-
-  // First pass: resolve card wins and accumulate bird cards
-  g.table.forEach((card, pos) => {
-    if (betCount[pos] === 1) {
-      const seat = betBySeat[pos];
-      g.players[seat].scored.push({ ...card, lilies: [...card.lilies] });
-      result.winners[pos] = seat;
-      if (card.bird) {
-        g.players[seat].birdCards++;
-      }
-    }
-  });
-
-  // Second pass: resolve bird token with tie-breaking
-  // Rule: in case of a tie (multiple players with equal claim), token doesn't move
-  const prev = g.birdHolder;
-  if (prev === null) {
-    // First acquisition: find all players who gained a bird card this round
-    const birdWinners = Object.entries(result.winners)
-      .filter(([pos]) => g.table[pos].bird)
-      .map(([, seat]) => seat);
-    if (birdWinners.length === 1) {
-      g.birdHolder = birdWinners[0];
-      result.birdUpdate = { type: 'first', seat: birdWinners[0], name: g.players[birdWinners[0]].name };
-    } else if (birdWinners.length > 1) {
-      // Tie on first acquisition — token stays on table (null)
-      result.birdUpdate = { type: 'tie_first', seats: birdWinners, names: birdWinners.map(s => g.players[s].name) };
-    }
-  } else {
-    // Steal check: find all non-holders who now exceed the holder's count
-    const holderCount = g.players[prev].birdCards;
-    const stealCandidates = g.players.reduce((acc, p, i) => {
-      if (i !== prev && p.birdCards > holderCount) acc.push(i);
-      return acc;
-    }, []);
-    if (stealCandidates.length === 1) {
-      const thief = stealCandidates[0];
-      g.birdHolder = thief;
-      result.birdUpdate = { type: 'steal', seat: thief, from: prev,
-        name: g.players[thief].name, fromName: g.players[prev].name };
-    } else if (stealCandidates.length > 1) {
-      // Tie on steal — token stays with current holder
-      result.birdUpdate = { type: 'tie_steal', seats: stealCandidates, names: stealCandidates.map(s => g.players[s].name) };
-    }
-  }
-
-  g.discard.push(...g.table.map(c => ({ ...c, lilies: [...c.lilies] })));
-  g.lastResult = result; g.phase = 'REVEAL'; g.turnGen++;
-  lobby.autoTimers.forEach((t, i) => { if (t) { clearTimeout(t); lobby.autoTimers[i] = null; } });
-  broadcastGame(lobby);
-
-  const gen = g.turnGen;
-  setTimeout(() => {
-    if (!lobby.game || lobby.game.turnGen !== gen || lobby.game.phase !== 'REVEAL') return;
-    nextRound(lobby);
-  }, REVEAL_MS);
-}
-
-function nextRound(lobby) {
-  const g = lobby.game;
-  if (g.deck.length < g.n) {
-    if (g.deckPass === 0) { g.deck.push(...shuffle(g.discard)); g.discard = []; g.deckPass = 1; }
-    else { endGame(lobby); return; }
-  }
-  if (g.deck.length < g.n) { endGame(lobby); return; }
-  g.table = g.deck.splice(0, g.n); g.bets = new Array(g.n).fill(null);
-  g.lastResult = null; g.phase = 'BETTING'; g.turnGen++;
-  broadcastGame(lobby);
-  if (g.isSolo) scheduleBots(lobby); else scheduleAutoBeats(lobby);
-}
-
-function endGame(lobby) {
-  const g = lobby.game;
-  g.phase = 'GAME_OVER'; g.finalScores = computeScores(g);
-  const maxPts = Math.max(...g.finalScores.map(s => s.pts));
-  g.winnerIdx = g.finalScores.findIndex(s => s.pts === maxPts);
-  broadcastGame(lobby); broadcastLobbyList();
-}
-
-// ─── BOT AI ──────────────────────────────────────────────────────────────────
-function scheduleBots(lobby) {
-  const g = lobby.game;
-  if (!g || !g.isSolo || g.phase !== 'BETTING') return;
-  const gen = g.turnGen;
-  [1, 2].forEach(bot => {
-    if (g.bets[bot] !== null) return;
-    const delay = BOT_MIN_MS + Math.random() * (BOT_MAX_MS - BOT_MIN_MS);
-    setTimeout(() => {
-      if (!lobby.game || lobby.game.turnGen !== gen || lobby.game.phase !== 'BETTING') return;
-      if (g.bets[bot] !== null) return;
-      g.bets[bot] = botChoose(g, bot);
-      broadcastGame(lobby); checkAllBetsIn(lobby);
-    }, bot === 1 ? delay : delay + 300 + Math.random() * 400);
-  });
-}
-
-function botChoose(g, seat) {
-  const player = g.players[seat];
-  const myLilies = new Set(); player.scored.forEach(c => c.lilies.forEach(l => myLilies.add(l)));
-  const otherBot = seat === 1 ? g.bets[2] : g.bets[1];
-  const scored = g.table.map((card, pos) => {
-    let s = card.cap * 10 + card.lilies.filter(l => !myLilies.has(l)).length * 8;
-    if (card.bird) s += g.birdHolder === null ? 20 : (g.birdHolder !== seat && player.birdCards >= g.players[g.birdHolder].birdCards ? 15 : 4);
-    if (otherBot === pos) s -= 30;
-    s += (Math.random() - 0.5) * 12;
-    return { pos, s };
-  }).sort((a, b) => b.s - a.s);
-  return Math.random() < 0.75 ? scored[0].pos : scored[Math.min(1, scored.length-1)].pos;
-}
-
-function scheduleAutoBeats(lobby) {
-  const g = lobby.game;
-  if (!g || g.isSolo || !lobby.seatMap) return;
-  const gen = g.turnGen;
-  lobby.seatMap.forEach((ls, gs) => {
-    if (lobby.players[ls] || g.bets[gs] !== null) return;
-    const t = setTimeout(() => {
-      if (!lobby.game || lobby.game.turnGen !== gen || lobby.game.phase !== 'BETTING') return;
-      if (g.bets[gs] !== null) return;
-      g.bets[gs] = Math.floor(Math.random() * g.n);
-      broadcastGame(lobby); checkAllBetsIn(lobby);
-    }, AUTODEAL_MS);
-    lobby.autoTimers[ls] = t;
-  });
-}
-
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-function findGameSeat(lobby, ls) { return !lobby.seatMap ? ls : lobby.seatMap.indexOf(ls); }
-
-function hardLeaveBySlot(lobby, ls) {
-  const token = lobby.tokens[ls]; if (token) delete sessions[token];
-  lobby.players[ls] = null; lobby.names[ls] = ''; lobby.tokens[ls] = null;
-  clearTimeout(lobby.graceTimers[ls]); clearTimeout(lobby.autoTimers[ls]);
-  lobby.graceTimers[ls] = null; lobby.autoTimers[ls] = null;
-  lobby.players.forEach(p => { if (p) sendTo(p, { type: 'PLAYER_LEFT', seat: ls, lobby: lobbyInfo(lobby) }); });
-  if (lobby.solo && ls === 0) { lobby.game = null; lobby.seatMap = null; }
-  if (!lobby.solo && lobby.game && lobby.game.phase !== 'GAME_OVER') {
-    const rem = lobby.seatMap ? lobby.seatMap.filter(li => lobby.players[li]).length : 0;
-    if (rem < 2) endGame(lobby);
-  }
-  broadcastLobbyList();
-}
-
-// ─── ACTION HANDLER ──────────────────────────────────────────────────────────
-function handleAction(ws, msg) {
-  if (msg.type === 'PING')      { sendTo(ws, { type: 'PONG' }); return; }
-  if (msg.type === 'LOBBIES')   { sendTo(ws, { type: 'LOBBIES', lobbies: Object.values(lobbies).map(lobbyInfo) }); return; }
-  if (msg.type === 'RECONNECT') { handleReconnect(ws, msg); return; }
-  if (msg.type === 'JOIN_LOBBY') { handleJoin(ws, msg); return; }
-
-  const st = wsState.get(ws); if (!st || !st.lobbyId) return;
-  const lobby = lobbies[st.lobbyId]; if (!lobby) return;
-  const ls = st.seat, g = lobby.game;
-
-  if (msg.type === 'LEAVE_LOBBY') {
-    hardLeaveBySlot(lobby, ls); wsState.delete(ws);
-    sendTo(ws, { type: 'LOBBIES', lobbies: Object.values(lobbies).map(lobbyInfo) }); return;
-  }
-  if (msg.type === 'REQUEST_STATE') {
-    if (g) sendTo(ws, { type: 'GAME_STATE', state: buildView(g, findGameSeat(lobby, ls)) });
-    else    sendTo(ws, { type: 'LOBBY_STATE', lobby: lobbyInfo(lobby), names: lobby.names, myLobbySeat: ls });
-    return;
-  }
-  if (msg.type === 'START') {
-    if (lobby.solo || ls !== 0 || (g && g.phase !== 'GAME_OVER')) return;
-    const active = lobby.players.map((p, i) => p ? i : -1).filter(i => i >= 0);
-    if (active.length < 2) { sendTo(ws, { type: 'ERROR', text: 'Precisas de pelo menos 2 jogadores.' }); return; }
-    lobby.seatMap = active;
-    lobby.game    = newGame(active.map(i => lobby.names[i]), false);
-    active.forEach((li, gi) => { const w = lobby.players[li]; if (w) { const s = wsState.get(w); if (s) s.gameSeat = gi; } });
-    broadcastGame(lobby); broadcastLobbyList(); scheduleAutoBeats(lobby); return;
-  }
-  if (msg.type === 'BET') {
-    if (!g || g.phase !== 'BETTING') { if (g) sendTo(ws, { type: 'GAME_STATE', state: buildView(g, findGameSeat(lobby, ls)) }); return; }
-    const gs = findGameSeat(lobby, ls); if (gs === -1) return;
-    const pos = parseInt(msg.position);
-    if (isNaN(pos) || pos < 0 || pos >= g.n || g.bets[gs] !== null) return;
-    g.bets[gs] = pos; broadcastGame(lobby); checkAllBetsIn(lobby); return;
-  }
-  if (msg.type === 'RESTART') {
-    if (!g || g.phase !== 'GAME_OVER') return;
-    if (lobby.solo) {
-      lobby.game = newGame([lobby.names[0]||'Jogador','Bot Capivaras 1','Bot Capivaras 2'], true);
-      lobby.seatMap = null; const s = wsState.get(ws); if (s) s.gameSeat = 0;
-      broadcastGame(lobby); scheduleBots(lobby);
-    } else {
-      if (ls !== 0) return;
-      const active = lobby.players.map((p, i) => p ? i : -1).filter(i => i >= 0);
-      if (active.length < 2) { sendTo(ws, { type: 'ERROR', text: 'Precisas de pelo menos 2 jogadores.' }); return; }
-      lobby.seatMap = active;
-      lobby.game    = newGame(active.map(i => lobby.names[i]), false);
-      active.forEach((li, gi) => { const w = lobby.players[li]; if (w) { const s = wsState.get(w); if (s) s.gameSeat = gi; } });
-      broadcastGame(lobby); scheduleAutoBeats(lobby);
-    }
-  }
-}
-
-function handleJoin(ws, msg) {
-  const { lobbyId, playerName } = msg;
-  const lobby = lobbies[lobbyId];
-  if (!lobby) { sendTo(ws, { type: 'ERROR', text: 'Mesa não encontrada.' }); return; }
-  if (!lobby.solo && lobby.game && lobby.game.phase !== 'GAME_OVER') {
-    sendTo(ws, { type: 'ERROR', text: 'Jogo em curso.' }); return; }
-  const seat = lobby.players.findIndex(p => p === null);
-  if (seat === -1) { sendTo(ws, { type: 'ERROR', text: 'Mesa cheia.' }); return; }
-  const name  = (playerName||'').trim().slice(0,20)||'Jogador';
-  const token = Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
-  lobby.players[seat]=ws; lobby.names[seat]=name; lobby.tokens[seat]=token;
-  wsState.set(ws, { lobbyId, seat, gameSeat: seat, token });
-  sessions[token] = { lobbyId, seat, name };
-  sendTo(ws, { type:'JOINED', seat, token, lobbyId, solo:lobby.solo, name, lobby:lobbyInfo(lobby), names:lobby.names });
-  lobby.players.forEach((p,i) => { if(p&&i!==seat) sendTo(p,{type:'PLAYER_JOINED',seat,name,lobby:lobbyInfo(lobby)}); });
-  broadcastLobbyList();
-  if (lobby.solo) {
-    lobby.seatMap=null; const s=wsState.get(ws); if(s) s.gameSeat=0;
-    lobby.game=newGame([name,'Bot Capivaras 1','Bot Capivaras 2'],true);
-    broadcastGame(lobby); scheduleBots(lobby);
-  }
-}
-
-function handleReconnect(ws, msg) {
-  const sess=sessions[msg.token];
-  if (!sess) { sendTo(ws,{type:'RECONNECT_FAIL'}); return; }
-  const lobby=lobbies[sess.lobbyId];
-  if (!lobby) { sendTo(ws,{type:'RECONNECT_FAIL'}); return; }
-  const {seat,name}=sess;
-  // Reject if seat already has a live connection (e.g. duplicate tab)
-  const existing=lobby.players[seat];
-  if (existing && existing!==ws && existing.readyState===1) {
-    sendTo(ws,{type:'RECONNECT_FAIL'}); return;
-  }
-  clearTimeout(lobby.graceTimers[seat]); lobby.graceTimers[seat]=null;
-  lobby.players[seat]=ws; lobby.names[seat]=name;
-  const gs=lobby.seatMap?lobby.seatMap.indexOf(seat):seat;
-  wsState.set(ws,{lobbyId:sess.lobbyId,seat,gameSeat:gs,token:msg.token});
-  sendTo(ws,{type:'RECONNECTED',seat,gameSeat:gs,name,solo:lobby.solo});
-  broadcastLobbyList();
-  if (lobby.game) {
-    broadcastGame(lobby);
-    if (!lobby.game.isSolo&&lobby.game.phase==='BETTING'){clearTimeout(lobby.autoTimers[seat]);lobby.autoTimers[seat]=null;}
-    if (lobby.game.isSolo&&lobby.game.phase==='BETTING') scheduleBots(lobby);
-  } else {
-    sendTo(ws,{type:'LOBBY_STATE',lobby:lobbyInfo(lobby),names:lobby.names,myLobbySeat:seat});
-  }
-  lobby.players.forEach((p,i)=>{if(p&&i!==seat)sendTo(p,{type:'OPPONENT_RECONNECTED',seat,name});});
-}
-
-// ─── HTTP + WS SERVER ────────────────────────────────────────────────────────
-const MANIFEST = `{
-  "name": "Capivaras",
-  "short_name": "Capivaras",
-  "description": "Um jogo de apostas secretas no Pantanal",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#f8f2e2",
-  "theme_color": "#c47c28",
-  "orientation": "any",
-  "icons": [
-    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
-}`;
-const SW = "self.addEventListener('fetch', e => {\n  // network-first: serve fresh if online, nothing cached\n});";
-
-const server = http.createServer((req, res) => {
-  const url = req.url.split('?')[0];
-  if (url === '/' || url === '/index.html') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(CLIENT_HTML);
-  } else if (url.startsWith('/splash/')) {
-    // /splash/WxH.png  e.g. /splash/1170x2532.png
-    const m = url.match(/\/splash\/(\d+)x(\d+)\.png/);
-    if (m) {
-      const png = getSplash(parseInt(m[1]), parseInt(m[2]));
-      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public,max-age=86400' });
-      res.end(png);
-    } else { res.writeHead(404); res.end(); }
-  } else if (url === '/manifest.webmanifest' || url === '/manifest.json') {
-    res.writeHead(200, { 'Content-Type': 'application/manifest+json' });
-    res.end(MANIFEST);
-  } else if (url === '/sw.js') {
-    res.writeHead(200, { 'Content-Type': 'application/javascript', 'Service-Worker-Allowed': '/' });
-    res.end(SW);
-  } else {
-    serveStatic(req, res);
-  }
+// ═══════════════════════════════════════════════════════════════
+// LOBBY
+// ═══════════════════════════════════════════════════════════════
+const LOBBY_DEFS = [
+  {id:'cat-4p-1',name:'Mesa 4J — 1',maxP:4,solo:false},
+  {id:'cat-4p-2',name:'Mesa 4J — 2',maxP:4,solo:false},
+  {id:'cat-2p-1',name:'Mesa 2J — 1',maxP:2,solo:false},
+  {id:'cat-2p-2',name:'Mesa 2J — 2',maxP:2,solo:false},
+  {id:'cat-solo-3',name:'Solo vs 3 Bots',maxP:1,solo:true,bots:3},
+  {id:'cat-solo-1',name:'Solo vs 1 Bot', maxP:1,solo:true,bots:1},
+];
+const LOBBIES={}, SESSIONS={}, WS_MAP=new WeakMap();
+LOBBY_DEFS.forEach(d=>{
+  LOBBIES[d.id]={...d,players:Array(d.maxP).fill(null),names:Array(d.maxP).fill(''),
+    tokens:Array(d.maxP).fill(null),game:null,graceTimers:Array(d.maxP).fill(null),
+    botTimer:null,_abandonedAt:null};
 });
 
-wss = new WebSocketServer({ server });
-wss.on('connection', ws => {
-  ws.on('message', raw => { try { handleAction(ws, JSON.parse(raw)); } catch {} });
-  ws.on('close', () => {
-    const st = wsState.get(ws); if (!st||!st.lobbyId) return;
-    const lobby=lobbies[st.lobbyId]; if(!lobby) return;
-    const {seat}=st;
-    lobby.players[seat]=null;
-    lobby.players.forEach(p=>{if(p)sendTo(p,{type:'OPPONENT_DISCONNECTED_GRACE',seat,name:lobby.names[seat],graceMs:GRACE_MS});});
-    broadcastLobbyList();
-    const g=lobby.game;
-    if (g&&g.phase==='BETTING') {
-      const gs=findGameSeat(lobby,seat);
-      if (gs!==-1&&g.bets[gs]===null) {
-        const gen=g.turnGen;
-        lobby.autoTimers[seat]=setTimeout(()=>{
-          if(!lobby.game||lobby.game.turnGen!==gen||lobby.game.phase!=='BETTING') return;
-          if(g.bets[gs]!==null) return;
-          g.bets[gs]=Math.floor(Math.random()*g.n);
-          broadcastGame(lobby); checkAllBetsIn(lobby);
-        }, AUTODEAL_MS);
+function cSend(ws,obj){if(ws?.readyState===1)ws.send(JSON.stringify(obj));}
+function lobbyInfo(l){return{id:l.id,name:l.name,solo:l.solo,maxP:l.maxP,bots:l.bots||0,
+  seated:l.players.filter(Boolean).length,playing:!!l.game&&l.game.phase!=='GAME_OVER',names:l.names.filter(Boolean)};}
+function broadcastLobbies(){
+  const list=Object.values(LOBBIES).map(lobbyInfo);
+  for(const ws of wss.clients){if(!WS_MAP.get(ws)?.lobbyId)cSend(ws,{type:'LOBBIES',lobbies:list});}
+}
+function broadcastGame(lobby){
+  const g=lobby.game;if(!g)return;
+  lobby.players.forEach((ws,i)=>{if(ws)cSend(ws,{type:'GAME_STATE',state:catView(g,i)});});
+}
+function sendLobbyState(lobby,ws,seat){
+  cSend(ws,{type:'LOBBY_STATE',lobby:lobbyInfo(lobby),names:lobby.names,mySeat:seat});
+}
+function scheduleBots(lobby){
+  if(lobby.botTimer)return;
+  lobby.botTimer=setTimeout(()=>{
+    lobby.botTimer=null;
+    const g=lobby.game;if(!g||g.phase==='GAME_OVER')return;
+    const p=g.players[g.cur];if(!p?.isBot)return;
+    const action=catBot(g);
+    if(action){const res=catHandle(g,g.cur,action);broadcastGame(lobby);}
+    if(g.phase!=='GAME_OVER')scheduleBots(lobby);
+  },800+Math.random()*600);
+}
+
+setInterval(()=>{
+  const now=Date.now();
+  Object.values(LOBBIES).forEach(lobby=>{
+    if(!lobby.game)return;
+    const alive=lobby.players.some(ws=>ws?.readyState===1);
+    if(!alive){
+      if(!lobby._abandonedAt){lobby._abandonedAt=now;return;}
+      if(now-lobby._abandonedAt>(lobby.solo?1800000:3600000)){
+        if(lobby.botTimer){clearTimeout(lobby.botTimer);lobby.botTimer=null;}
+        lobby.game=null;lobby._abandonedAt=null;
+        lobby.players.fill(null);lobby.names.fill('');lobby.tokens.fill(null);
+        Object.keys(SESSIONS).forEach(tok=>{if(SESSIONS[tok]?.lobbyId===lobby.id)delete SESSIONS[tok];});
+        broadcastLobbies();
       }
+    }else{lobby._abandonedAt=null;}
+  });
+},300000);
+
+function dispatch(ws,msg){
+  if(msg.type==='PING'){cSend(ws,{type:'PONG'});return;}
+  if(msg.type==='LOBBIES'){cSend(ws,{type:'LOBBIES',lobbies:Object.values(LOBBIES).map(lobbyInfo)});return;}
+
+  if(msg.type==='RECONNECT'){
+    const sess=SESSIONS[msg.token];if(!sess){cSend(ws,{type:'RECONNECT_FAIL'});return;}
+    const lobby=LOBBIES[sess.lobbyId];if(!lobby){cSend(ws,{type:'RECONNECT_FAIL'});return;}
+    const{seat}=sess;clearTimeout(lobby.graceTimers[seat]);
+    lobby.players[seat]=ws;WS_MAP.set(ws,{lobbyId:lobby.id,seat,token:msg.token});
+    cSend(ws,{type:'RECONNECTED',seat,solo:lobby.solo});
+    if(lobby.game){
+      cSend(ws,{type:'GAME_STATE',state:catView(lobby.game,seat)});
+      // Resume bot timer if it was paused
+      if(lobby.solo&&lobby.game.phase!=='GAME_OVER')scheduleBots(lobby);
+    } else sendLobbyState(lobby,ws,seat);
+    broadcastLobbies();return;
+  }
+
+  if(msg.type==='JOIN_LOBBY'){
+    const lobby=LOBBIES[msg.lobbyId];if(!lobby){cSend(ws,{type:'ERROR',text:'Mesa inválida'});return;}
+    const seat=lobby.players.findIndex(p=>p===null);if(seat===-1){cSend(ws,{type:'ERROR',text:'Mesa cheia'});return;}
+    const token=Math.random().toString(36).slice(2)+Date.now().toString(36);
+    lobby.players[seat]=ws;lobby.names[seat]=msg.playerName;lobby.tokens[seat]=token;
+    SESSIONS[token]={lobbyId:lobby.id,seat,name:msg.playerName};
+    WS_MAP.set(ws,{lobbyId:lobby.id,seat,token});
+    cSend(ws,{type:'JOINED',seat,token,lobbyId:lobby.id,solo:lobby.solo,lobby:lobbyInfo(lobby),names:lobby.names});
+    lobby.players.forEach((p,i)=>{if(p&&i!==seat)cSend(p,{type:'PLAYER_JOINED',name:msg.playerName});});
+    broadcastLobbies();
+    if(lobby.solo){
+      const botNames=['Bot Arquimedes','Bot Pitágoras','Bot Euclides'].slice(0,lobby.bots||1);
+      const lps=[{name:msg.playerName,isBot:false},...botNames.map(n=>({name:n,isBot:true}))];
+      lobby.game=catNewGame(lps);catInitTurn(lobby.game,0);
+      broadcastGame(lobby);scheduleBots(lobby);
     }
-    lobby.graceTimers[seat]=setTimeout(()=>hardLeaveBySlot(lobby,seat),GRACE_MS);
+    return;
+  }
+
+  const st=WS_MAP.get(ws);if(!st){cSend(ws,{type:'ERROR',text:'Não estás numa mesa'});return;}
+  const lobby=LOBBIES[st.lobbyId];if(!lobby)return;
+  const{seat}=st;
+
+  if(msg.type==='LEAVE_LOBBY'){
+    clearTimeout(lobby.graceTimers[seat]);
+    if(SESSIONS[lobby.tokens[seat]])delete SESSIONS[lobby.tokens[seat]];
+    const name=lobby.names[seat];
+    lobby.players[seat]=null;lobby.names[seat]='';lobby.tokens[seat]=null;WS_MAP.delete(ws);
+    if(lobby.game&&!lobby.solo){lobby.game=null;lobby.players.forEach(p=>{if(p)cSend(p,{type:'GAME_ABORTED',reason:`${name} saiu.`});});}
+    if(lobby.game&&lobby.solo){lobby.game=null;if(lobby.botTimer){clearTimeout(lobby.botTimer);lobby.botTimer=null;}}
+    lobby._abandonedAt=null;broadcastLobbies();return;
+  }
+
+  if(msg.type==='REQUEST_STATE'){
+    if(lobby.game)cSend(ws,{type:'GAME_STATE',state:catView(lobby.game,seat)});
+    else sendLobbyState(lobby,ws,seat);return;
+  }
+
+  if(msg.type==='START'){
+    if(seat!==0&&!lobby.solo){cSend(ws,{type:'ERROR',text:'Só o anfitrião pode iniciar'});return;}
+    const seated=lobby.players.map((p,i)=>p?i:-1).filter(i=>i!==-1);
+    if(!lobby.solo&&seated.length<lobby.maxP){cSend(ws,{type:'ERROR',text:`Precisas de ${lobby.maxP} jogadores`});return;}
+    const lps=seated.map(i=>({name:lobby.names[i],isBot:false}));
+    lobby.game=catNewGame(lps);catInitTurn(lobby.game,0);
+    broadcastGame(lobby);scheduleBots(lobby);return;
+  }
+
+  if(msg.type==='RESTART'){
+    lobby.game=null;
+    lobby.players.forEach((p,i)=>{if(p)sendLobbyState(lobby,p,i);});
+    broadcastLobbies();return;
+  }
+
+  const g=lobby.game;if(!g){cSend(ws,{type:'ERROR',text:'Sem jogo em curso'});return;}
+  const result=catHandle(g,seat,msg);
+  if(result?.error){cSend(ws,{type:'ERROR',text:result.error});return;}
+  broadcastGame(lobby);
+  if(g.phase!=='GAME_OVER')scheduleBots(lobby);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HTTP + WS
+// ═══════════════════════════════════════════════════════════════
+const MIME={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.png':'image/png','.ico':'image/x-icon','.json':'application/json'};
+const server=http.createServer((req,res)=>{
+  let url=req.url.split('?')[0];if(url==='/')url='/index.html';
+  fs.readFile(path.join(PUB_DIR,url),(err,data)=>{
+    if(err){res.writeHead(404);res.end('Not found');return;}
+    res.writeHead(200,{'Content-Type':MIME[path.extname(url)]||'application/octet-stream'});res.end(data);
+  });
+});
+
+const wss=new WebSocketServer({noServer:true});
+wss.on('connection',ws=>{
+  cSend(ws,{type:'LOBBIES',lobbies:Object.values(LOBBIES).map(lobbyInfo)});
+  ws.on('message',raw=>{try{dispatch(ws,JSON.parse(raw));}catch(e){console.error(e);}});
+  ws.on('close',()=>{
+    const st=WS_MAP.get(ws);if(!st?.lobbyId)return;
+    const lobby=LOBBIES[st.lobbyId];if(!lobby)return;
+    const{seat,token}=st;
+    lobby.players[seat]=null;
+    if(lobby.solo){
+      // Solo: short grace period (12s) — enough for browser refresh to reconnect
+      // Bot timer pauses during grace period, resumes on reconnect
+      if(lobby.botTimer){clearTimeout(lobby.botTimer);lobby.botTimer=null;}
+      lobby.graceTimers[seat]=setTimeout(()=>{
+        // No reconnect in 12s — reset lobby fully
+        lobby.names[seat]='';lobby.tokens[seat]=null;
+        if(SESSIONS[token])delete SESSIONS[token];
+        if(lobby.game){lobby.game=null;}
+        lobby._abandonedAt=null;
+        broadcastLobbies();
+      },12000);
+      broadcastLobbies();
+    } else {
+      // MP: 45s grace period to reconnect
+      lobby.graceTimers[seat]=setTimeout(()=>{
+        lobby.names[seat]='';lobby.tokens[seat]=null;
+        if(SESSIONS[token])delete SESSIONS[token];
+        if(lobby.game){lobby.game=null;lobby.players.forEach(p=>{if(p)cSend(p,{type:'GAME_ABORTED',reason:'Adversário desligou.'});});}
+        broadcastLobbies();
+      },45000);
+      broadcastLobbies();
+    }
   });
   ws.on('error',()=>{});
 });
 
-setInterval(()=>{ for(const ws of wss.clients) if(ws.readyState===1) ws.ping(); },20_000);
-server.listen(PORT, ()=>console.log('Capivaras on port '+PORT));
-
-
-
-
-const CLIENT_HTML = `<!DOCTYPE html>
-<html lang="pt">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Capivaras</title>
-<meta name="application-name" content="Capivaras">
-<meta name="description" content="Um jogo de apostas secretas no Pantanal">
-<meta name="theme-color" content="#c47c28">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Capivaras">
-<link rel="apple-touch-icon" href="/bird.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3)" href="/splash/1290x2796.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3)" href="/splash/1179x2556.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3)" href="/splash/1170x2532.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3)" href="/splash/1125x2436.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2)" href="/splash/828x1792.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2)" href="/splash/750x1334.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2)" href="/splash/2048x2732.png">
-<link rel="apple-touch-startup-image" media="screen and (device-width:834px) and (device-height:1194px) and (-webkit-device-pixel-ratio:2)" href="/splash/1668x2388.png">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&family=Nunito:wght@400;600;700&family=Titan+One&display=swap" rel="stylesheet">
-<style>
-/* ─────────────────────────────────────────────────────────────────────────
-   PALETTE — extracted from card watercolor art
-   Background: gradient creme (#faf5e8) → mint (#c8ede6)
-   Capivara fur: warm amber (#c47c28)
-   Water: soft teal (#7dd4cc)
-   Text: deep warm brown (#2e1a0a)
-   Accents: amber, soft coral, muted teal
-───────────────────────────────────────────────────────────────────────── */
-:root {
-  /* backgrounds */
-  --bg-top:    #f8f2e2;
-  --bg-bottom: #b8e8e0;
-  --panel:     rgba(255,252,244,0.92);
-  --panel-b:   rgba(255,250,238,0.97);
-  --card-bg:   #ffffff;
-  --card-sel:  #fff8e8;
-
-  /* brand colours */
-  --amber:     #c47c28;   /* capivara fur — primary action */
-  --amber2:    #a66018;   /* hover */
-  --teal:      #5bbfb6;   /* water */
-  --teal2:     #3a9e96;   /* darker teal */
-  --sage:      #6aaa6a;   /* green confirmations */
-
-  /* text */
-  --ink:       #2e1a0a;   /* deep brown */
-  --ink2:      #6b4420;   /* medium brown */
-  --muted:     #9a7050;   /* light brown */
-
-  /* borders */
-  --border:    #d4b896;   /* warm tan */
-  --border2:   #e8d8c0;   /* lighter */
-
-  /* lily colours — matching card art */
-  --lily-Y: #e8a820;
-  --lily-R: #d85030;
-  --lily-W: #8898a8;
-  --lily-B: #4898c8;
-
-  /* gold for bird */
-  --gold: #e8b020;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  min-height: 100vh;
-  background: linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-  background-attachment: fixed;
-  color: var(--ink);
-  font-family: 'Nunito', system-ui, sans-serif;
-}
-
-/* ── SCREENS ── */
-.screen { display: none; min-height: 100vh; }
-.screen.active { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-#screen-game { justify-content: flex-start; padding: 12px; }
-
-/* ── LOGO ── */
-.game-logo {
-  font-family: 'Titan One', 'Fraunces', serif;
-  font-size: 4rem; font-weight: 400;
-  color: var(--amber); letter-spacing: .01em; line-height: 1;
-}
-.game-logo span { color: var(--amber); }
-.game-tagline { font-size: .9rem; color: var(--muted); margin-bottom: 32px; font-style: italic; font-family: 'Fraunces', serif; }
-.h-rule { width: 36px; height: 2px; background: var(--amber); opacity: .5; margin: 0 auto 28px; border-radius: 2px; }
-
-/* ── CARD BOX (panels) ── */
-.card-box {
-  background: var(--panel-b);
-  border: 1px solid var(--border2);
-  border-radius: 20px; padding: 32px;
-  max-width: 500px; width: 100%;
-  box-shadow: 0 4px 32px rgba(100,60,20,.12), 0 1px 4px rgba(100,60,20,.08);
-}
-.card-box h2 {
-  font-family: 'Fraunces', serif;
-  font-size: 1.3rem; font-weight: 700;
-  color: var(--ink); margin-bottom: 18px;
-}
-
-/* ── INPUTS & BUTTONS ── */
-input[type=text] {
-  width: 100%; padding: 12px 16px;
-  border-radius: 10px; border: 1.5px solid var(--border);
-  background: #fffef9; color: var(--ink);
-  font-size: 1rem; font-family: 'Nunito', sans-serif;
-  outline: none; margin-bottom: 16px;
-  transition: border-color .15s;
-}
-input[type=text]:focus { border-color: var(--amber); }
-input[type=text]::placeholder { color: var(--muted); opacity: .7; }
-
-.btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  gap: 6px; padding: 12px 24px; border-radius: 10px; border: none;
-  cursor: pointer; font-size: .95rem; font-weight: 700;
-  font-family: 'Nunito', sans-serif; transition: all .15s; letter-spacing: .01em;
-}
-.btn-primary { background: var(--amber); color: #fff; width: 100%; box-shadow: 0 2px 8px rgba(196,124,40,.3); }
-.btn-primary:hover { background: var(--amber2); }
-.btn-primary:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-.btn-outline { background: rgba(255,255,255,.6); border: 1.5px solid var(--border); color: var(--ink2); }
-.btn-outline:hover { border-color: var(--amber); color: var(--ink); background: rgba(255,255,255,.9); }
-.btn-sm { padding: 8px 16px; font-size: .83rem; }
-
-/* ── LOBBY ── */
-.lobby-grid { display: grid; gap: 10px; margin-top: 8px; width: 100%; }
-.lobby-row {
-  background: rgba(255,252,244,.8); border: 1.5px solid var(--border2);
-  border-radius: 12px; padding: 14px 18px;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  transition: border-color .18s, box-shadow .18s;
-}
-.lobby-row:not(.full):hover {
-  border-color: var(--amber);
-  box-shadow: 0 2px 12px rgba(196,124,40,.12);
-}
-.lobby-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 1rem; color: var(--ink); }
-.lobby-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
-.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: .68rem; font-weight: 700; border: 1px solid transparent; }
-.badge-green  { background: #e8f5e0; color: #2e7a2e; border-color: #b8dca8; }
-.badge-orange { background: #fff0d8; color: #a05800; border-color: #e8c878; }
-.badge-gray   { background: #f0ece4; color: var(--muted); border-color: var(--border2); }
-.join-btn {
-  background: var(--amber); color: #fff; border: none;
-  padding: 8px 18px; border-radius: 8px; cursor: pointer;
-  font-weight: 700; font-size: .83rem; font-family: 'Nunito', sans-serif;
-  white-space: nowrap; transition: background .15s;
-  box-shadow: 0 2px 6px rgba(196,124,40,.25);
-}
-.join-btn:hover { background: var(--amber2); }
-.join-btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
-
-/* ── WAIT ── */
-.wait-players { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 18px 0; }
-.wait-player {
-  background: rgba(255,252,244,.9); border: 1.5px solid var(--border2);
-  border-radius: 10px; padding: 9px 16px; font-size: .88rem; color: var(--ink2);
-}
-.wait-player.me { border-color: var(--amber); color: var(--ink); font-weight: 700; }
-
-/* ── GAME HEADER ── */
-.game-header {
-  width: 100%; max-width: 1000px;
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: nowrap; gap: 12px;
-  margin-bottom: 8px; padding: 6px 0;
-  border-bottom: 1.5px solid var(--border2);
-}
-.header-left {
-  display: flex; align-items: center; gap: 12px; min-width: 0;
-}
-.header-title {
-  font-family: 'Titan One', 'Fraunces', serif; font-size: 3rem; font-weight: 400;
-  color: var(--amber); letter-spacing: .01em; white-space: nowrap; line-height: 1;
-}
-.header-title span { color: var(--amber); }
-.bird-token {
-  background: #fff8e0; border: 1.5px solid #e8c878;
-  padding: 5px 10px; border-radius: 20px; align-self: center;
-  font-size: .7rem; color: #8a5a00; font-weight: 700;
-  display: inline-flex; align-items: center; gap: 5px;
-  white-space: nowrap; overflow: hidden; min-width: 0;
-}
-.bird-token.has-holder { border-color: var(--gold); color: #7a4800; background: #fff0c0; }
-.bird-pip   { width:22px; height:22px; object-fit:cover; border-radius:50%; flex-shrink:0; }
-.bird-pip.big { width:28px; height:28px; }
-.deck-info  { font-size: .74rem; color: var(--muted); white-space: nowrap; }
-
-/* ── PLAYERS BAR ── */
-.players-bar { width: 100%; max-width: 1000px; display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-.player-chip {
-  flex: 1; min-width: 100px;
-  background: var(--panel); border: 1.5px solid var(--border2);
-  border-radius: 10px; padding: 8px 10px;
-  box-shadow: 0 1px 4px rgba(100,60,20,.06);
-}
-.player-chip.me   { border-color: var(--amber); background: #fffaee; }
-.player-chip.bird { border-color: var(--gold); background: #fffae8; }
-.pname   { font-size: .74rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
-.ppts    { font-family: 'Fraunces', serif; font-size: 1.2rem; font-weight: 900; color: var(--amber); }
-.plilies { font-size: .67rem; margin-top: 2px; color: var(--muted); }
-.pbet    { font-size: .65rem; color: var(--teal2); margin-top: 2px; font-weight: 600; min-height: 1em; line-height: 1; }
-
-/* ── TABLE ── */
-.table-area  { width: 100%; max-width: 100%; margin-bottom: 10px; }
-.table-label { font-size: .7rem; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; text-align: center; width: 100%; }
-.table-cards { display: grid; gap: 10px; grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)))); justify-content: center; }
-
-/* ── THE CARD ── */
-.cap-card {
-  min-width: 0;
-  max-width: 300px;
-  width: 100%;
-  border-radius: 14px; border: 2px solid var(--border2);
-  cursor: pointer; transition: all .18s;
-  position: relative; overflow: hidden;
-  background: var(--card-bg); user-select: none;
-  box-shadow: 0 2px 8px rgba(100,60,20,.1);
-}
-/* hover removed — would reveal betting state */
-.cap-card.selected {
-  border-color: var(--amber);
-  background: var(--card-sel);
-  box-shadow: 0 0 0 3px rgba(196,124,40,.22), 0 8px 20px rgba(100,60,20,.15);
-  transform: translateY(-5px);
-}
-.cap-card.won    { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232,176,32,.25), 0 4px 12px rgba(100,60,20,.1); }
-.cap-card.nobody { border-color: var(--border2); opacity: .45; box-shadow: none; }
-.cap-card.reveal-card { cursor: default; }
-
-/* Art */
-.card-art-wrap { width: 100%; aspect-ratio: 300/420; position: relative; overflow: hidden; background: #f0f8f5; }
-.card-art { width: 100%; height: 100%; object-fit: cover; display: block; }
-.card-art-fallback {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', serif; font-weight: 900; font-size: 1.8rem;
-  color: var(--amber); opacity: .7;
-  background: linear-gradient(160deg, #f8f2e2 0%, #c8ede6 100%);
-}
-.card-art-fallback.hidden { display: none; }
-
-/* Position letter on art */
-.card-pos-badge {
-  position: absolute; top: 7px; left: 8px; z-index: 2;
-  background: rgba(255,252,244,.85); color: var(--ink);
-  font-size: .64rem; font-weight: 900;
-  padding: 2px 8px; border-radius: 12px;
-  font-family: 'Fraunces', serif; border: 1px solid var(--border2);
-}
-
-/* Info strip below art */
-.card-info { padding: 8px 10px 9px; background: #fffcf6; border-top: 1px solid var(--border2); }
-.card-caps-count {
-  font-family: 'Fraunces', serif;
-  font-size: .88rem; font-weight: 700; color: var(--ink); margin-bottom: 4px;
-}
-.card-badges { display: flex; gap: 3px; flex-wrap: wrap; }
-.lily { display: inline-block; padding: 2px 6px; border-radius: 5px; font-size: .62rem; font-weight: 700; }
-.lily-Y { background: #fff3c8; color: #8a5a00; border: 1px solid #e8c860; }
-.lily-R { background: #ffe8e0; color: #8a2810; border: 1px solid #e8a090; }
-.lily-W { background: #e8eef4; color: #3a5068; border: 1px solid #a8c0d0; }
-.lily-B { background: #e0f0f8; color: #185888; border: 1px solid #80c0e0; }
-.lily-bird { background: #fff8d8; color: #7a5000; border: 1px solid #e8c040; }
-
-.card-result-label {
-  position: absolute; top: 7px; right: 8px; z-index: 2;
-  font-size: .6rem; font-weight: 700;
-  padding: 2px 8px; border-radius: 12px;
-  font-family: 'Nunito', sans-serif;
-  max-width: calc(100% - 52px); /* don't overlap the A/B/C badge */
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.card-result-label.win    { background: var(--gold); color: #3a2000; }
-.card-result-label.nobody { background: rgba(100,80,60,.15); color: var(--muted); border: 1px solid var(--border); }
-
-/* ── STATUS BAR ── */
-.status-bar {
-  width: 100%; max-width: 1000px;
-  background: var(--panel); border: 1.5px solid var(--border2);
-  border-radius: 10px; padding: 10px 16px; margin-bottom: 10px;
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  box-shadow: 0 1px 4px rgba(100,60,20,.06);
-}
-.phase-badge { padding: 3px 12px; border-radius: 20px; font-size: .76rem; font-weight: 700; font-family: 'Fraunces', serif; }
-.phase-BETTING   { background: #e8f5e0; color: #1e5a1e; border: 1px solid #b0d890; }
-.phase-REVEAL    { background: #fff0d0; color: #7a4800; border: 1px solid #e8c060; }
-.phase-GAME_OVER { background: #fde8e0; color: #8a2010; border: 1px solid #e8a090; }
-.status-text { font-size: .86rem; color: var(--ink2); flex: 1; }
-.bet-count   { font-size: .76rem; color: var(--muted); margin-left: auto; font-weight: 600; }
-
-/* ── MY SCORED ── */
-.my-area { width: 100%; max-width: 1000px; padding-bottom: 20px; }
-.my-area-label { font-size: .68rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.my-scored { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
-.mini-card {
-  width: 100px; background: var(--card-bg);
-  border: 1.5px solid var(--border2); border-radius: 10px;
-  overflow: hidden; font-size: .7rem; color: var(--ink2);
-  box-shadow: 0 1px 4px rgba(100,60,20,.1);
-  display: flex; flex-direction: column;
-}
-.mini-card-art {
-  width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block;
-  background: linear-gradient(160deg, #f8f2e2 0%, #c8ede6 100%);
-}
-.mini-card-art.fallback {
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', serif; font-weight: 900; font-size: 1.2rem;
-  color: var(--amber); opacity: .7;
-}
-.mini-card-label {
-  padding: 4px 6px 5px; border-top: 1px solid var(--border2);
-  font-size: .65rem; line-height: 1.3; color: var(--ink2);
-  background: #fffcf6;
-}
-.mini-card-badges { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 2px; }
-.mini-lily { padding: 1px 4px; border-radius: 4px; font-size: .58rem; font-weight: 700; }
-
-/* ── GAME OVER ── */
-.overlay { display: none; position: fixed; inset: 0; background: rgba(46,26,10,.55); align-items: center; justify-content: center; z-index: 100; padding: 20px; backdrop-filter: blur(3px); }
-.overlay.active { display: flex; }
-.modal {
-  background: var(--panel-b); border: 1.5px solid var(--border2);
-  border-radius: 22px; padding: 32px;
-  max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(46,26,10,.25);
-}
-.modal h2 {
-  font-family: 'Fraunces', serif; font-size: 1.8rem; font-weight: 900;
-  color: var(--ink); text-align: center; margin-bottom: 24px;
-}
-.score-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 0; border-bottom: 1px solid var(--border2); gap: 8px;
-}
-.score-row:last-child { border: none; }
-.score-name   { font-weight: 700; color: var(--ink); }
-.score-pts    { font-family: 'Fraunces', serif; font-size: 1.1rem; font-weight: 900; color: var(--amber); white-space: nowrap; }
-.score-detail { font-size: .74rem; color: var(--muted); }
-.winner-badge { background: var(--gold); color: #3a2000; padding: 2px 9px; border-radius: 8px; font-size: .7rem; font-weight: 700; }
-.modal-actions { display: flex; gap: 10px; margin-top: 24px; }
-
-
-.bird-count { display:inline-flex; align-items:center; gap:2px; font-size:.75rem; color:#7a5000; font-weight:700; margin-left:3px; }
-
-
-/* ── VIDEO PLACEHOLDER ── */
-.video-wrap {
-  margin-top: 24px;
-  border-radius: 14px; overflow: hidden;
-  border: 1.5px solid var(--border2);
-  background: linear-gradient(160deg, #e8f4f0 0%, #d0ece6 100%);
-  position: relative; aspect-ratio: 16/9;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; color: var(--muted); cursor: pointer;
-}
-.video-wrap video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
-.video-wrap .play-icon {
-  width: 54px; height: 54px; border-radius: 50%;
-  background: rgba(196,124,40,.15); border: 2px solid var(--amber);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.4rem; color: var(--amber); position: relative; z-index: 1;
-  transition: background .2s;
-}
-.video-wrap:hover .play-icon { background: rgba(196,124,40,.28); }
-.video-label { font-size: .8rem; font-family: 'Fraunces', serif; font-style: italic; position: relative; z-index: 1; }
-.video-missing { font-size: .75rem; color: var(--muted); margin-top: 4px; position: relative; z-index: 1; }
-
-/* ── RULES PANEL ── */
-.rules-panel {
-  width: 100%; max-width: 1000px;
-  margin-top: 4px; margin-bottom: 20px;
-  border: 1.5px solid var(--border2); border-radius: 14px;
-  overflow: hidden;
-  background: var(--panel);
-  box-shadow: 0 1px 4px rgba(100,60,20,.06);
-}
-.rules-toggle {
-  width: 100%; background: none; border: none; cursor: pointer;
-  padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;
-  font-family: 'Fraunces', serif; font-size: .88rem; font-weight: 700;
-  color: var(--ink2); text-align: left;
-  transition: background .15s;
-}
-.rules-toggle:hover { background: rgba(196,124,40,.06); }
-.rules-toggle .chevron { font-size: .7rem; transition: transform .25s; color: var(--amber); }
-.rules-toggle.open .chevron { transform: rotate(180deg); }
-.rules-body {
-  display: none; padding: 0 20px 20px;
-  border-top: 1px solid var(--border2);
-  animation: slideDown .2s ease;
-}
-.rules-body.open { display: block; }
-@keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
-.rules-body h3 {
-  font-family: 'Fraunces', serif; font-size: 1rem; font-weight: 700;
-  color: var(--amber); margin: 18px 0 6px;
-}
-.rules-body p { font-size: .84rem; color: var(--ink2); line-height: 1.6; margin-bottom: 6px; }
-.rules-body ul { margin: 4px 0 8px 18px; }
-.rules-body li { font-size: .82rem; color: var(--ink2); line-height: 1.7; }
-.rules-body .rule-tag {
-  display: inline-block; padding: 1px 7px; border-radius: 5px;
-  font-size: .72rem; font-weight: 700; margin-right: 3px;
-  background: #fff3c8; color: #7a5000; border: 1px solid #e8c060;
-}
-.rules-body .rule-tag.green { background: #e8f5e0; color: #1e5a1e; border-color: #b0d890; }
-.rules-body .rule-tag.blue  { background: #e0f0f8; color: #185888; border-color: #80c0e0; }
-
-/* ── NOTIFICATION ── */
-#notif {
-  position: fixed; top: 20px; right: 20px;
-  background: var(--amber); color: #fff;
-  padding: 12px 20px; border-radius: 12px;
-  font-size: .88rem; font-weight: 700; z-index: 200;
-  transition: opacity .3s; pointer-events: none; opacity: 0;
-  max-width: 280px; text-align: center;
-  box-shadow: 0 4px 20px rgba(196,124,40,.35);
-}
-#notif.show { opacity: 1; }
-
-@media(max-width:640px){
-  .game-logo      { font-size: 2.8rem; }
-
-  .player-chip    { min-width: 80px; }
-  .header-title   { font-size: 1.1rem; }
-  .bird-pip.big   { width:18px; height:18px; }
-  .bird-token     { font-size: .6rem; padding: 2px 5px; gap: 3px; }
-  .deck-info      { display: none; }
-}
-
-/* ── AMBIENT PLAYER ── */
-.ambient-btn {
-  display: flex; align-items: center; gap: 5px;
-  background: var(--card-bg); border: 1.5px solid var(--border2);
-  border-radius: 20px; padding: 4px 10px 4px 7px;
-  font-size: .7rem; color: var(--ink2); cursor: pointer;
-  white-space: nowrap; transition: background .15s;
-  font-family: 'Nunito', sans-serif; font-weight: 600;
-}
-.ambient-btn:hover { background: #e8f5f3; }
-.ambient-btn .amb-icon { font-size: .95rem; line-height: 1; }
-</style>
-</head>
-<body>
-<div id="notif"></div>
-
-<!-- NAME -->
-<div class="screen active" id="screen-name">
-  <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
-    <div class="card-box" style="text-align:center">
-      <div class="game-logo">Capi<span>varas</span></div>
-      <div class="game-tagline">Um jogo de apostas secretas</div>
-      <div class="h-rule"></div>
-      <h2 style="text-align:left">Como te chamas?</h2>
-      <input type="text" id="inp-name" placeholder="O teu nome..." maxlength="20" autocomplete="off">
-      <button class="btn btn-primary" id="btn-go">Entrar no jogo</button>
-    </div>
-    <div class="video-wrap" id="video-wrap" onclick="playRulesVideo()">
-      <video id="rules-video" preload="none" controls style="display:none"></video>
-      <div class="play-icon" id="play-icon">▶</div>
-      <div class="video-label">Como jogar — ver as regras</div>
-      <div class="video-missing" id="video-missing">regras.mp4 não encontrado</div>
-    </div>
-    <p style="text-align:center;font-size:.68rem;color:#9a7050;font-family:'Fraunces',serif;font-style:italic;padding:2px 0 0">Um jogo de David Marques &nbsp;·&nbsp; <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" style="color:#c47c28;text-decoration:none">CC BY-NC-ND 4.0</a></p>
-  </div>
-</div>
-<!-- LOBBY -->
-<div class="screen" id="screen-lobby">
-  <div class="card-box" style="max-width:560px">
-    <div style="text-align:center;margin-bottom:24px">
-      <div class="game-logo" style="font-size:2.2rem">Capi<span>varas</span></div>
-    </div>
-    <h2>Escolhe uma mesa</h2>
-    <div class="lobby-grid" id="lobby-list"></div>
-    <div style="margin-top:18px">
-      <button class="btn btn-outline btn-sm" id="btn-back-name">← Mudar nome</button>
-    </div>
-  </div>
-</div>
-
-<!-- WAIT -->
-<div class="screen" id="screen-wait">
-  <div class="card-box">
-    <div style="text-align:center;margin-bottom:20px">
-      <div class="game-logo" style="font-size:2rem">Capi<span>varas</span></div>
-    </div>
-    <h2 id="wait-title">A aguardar jogadores...</h2>
-    <div class="wait-players" id="wait-players"></div>
-    <div id="wait-host-area" style="display:none">
-      <button class="btn btn-primary" id="btn-start" disabled>Iniciar Jogo</button>
-    </div>
-    <div id="wait-guest-msg" style="display:none;color:var(--muted);font-size:.88rem;text-align:center;padding:8px 0">
-      Aguarda que o anfitriao inicie o jogo...
-    </div>
-    <div style="margin-top:16px">
-      <button class="btn btn-outline btn-sm" id="btn-leave-wait">← Sair da mesa</button>
-    </div>
-  </div>
-</div>
-
-<!-- GAME -->
-<div class="screen" id="screen-game">
-  <div class="game-header">
-    <div class="header-left">
-      <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
-      <div class="deck-info" id="deck-info">—</div>
-    </div>
-    <audio id="ambient-audio" src="/ambient.mp3" loop preload="auto"></audio>
-    <div style="display:flex;align-items:center;gap:6px">
-      <button class="ambient-btn" id="ambient-btn" onclick="toggleAmbient()" title="Música ambiente">
-        <span class="amb-icon" id="amb-icon">🔇</span>
-        <span id="amb-label">Som</span>
-      </button>
-      <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
-    </div>
-  </div>
-  <div class="players-bar" id="players-bar"></div>
-  <div class="table-area">
-    <div class="table-cards" id="table-cards"></div>
-  </div>
-  <div class="status-bar">
-    <span class="phase-badge" id="phase-badge">—</span>
-    <span class="status-text" id="status-text">—</span>
-    <span class="bet-count"   id="bet-count"></span>
-  </div>
-  <div class="my-area">
-    <div class="my-area-label">As tuas capivaras</div>
-    <div class="my-scored" id="my-scored"></div>
-  </div>
-
-  <!-- RULES PANEL -->
-  <div class="rules-panel">
-    <button class="rules-toggle" id="rules-toggle" onclick="toggleRules()">
-      <span>Como jogar — Regras do Capivaras</span>
-      <span class="chevron">▼</span>
-    </button>
-    <div class="rules-body" id="rules-body">
-
-      <h3>O Pantanal acorda...</h3>
-      <p>No coração húmido do Pantanal, uma colónia de capivaras relaxa ao sol. Chegaram os humanos — cada um quer dar festinhas nas suas favoritas. Mas as capivaras são tímidas: se dois humanos se aproximarem ao mesmo tempo, fogem imediatamente. Só o jogador que chegar <em>sozinho</em> ganha a sua capivara.</p>
-
-      <h3>O teu turno</h3>
-      <p>A cada ronda, são colocadas na mesa tantas cartas quantos os jogadores. Em segredo, cada um coloca uma ficha virada para baixo com o número da carta que quer conquistar. Quando todos estiverem prontos, revelam ao mesmo tempo.</p>
-      <ul>
-        <li><span class="rule-tag green">Sozinho</span> Foste o único a escolher essa carta? É tua!</li>
-        <li><span class="rule-tag">Empate</span> Mais de um jogador escolheu a mesma carta? Ninguém ganha — as capivaras fugiram.</li>
-      </ul>
-
-      <h3>O pássaro amarelo</h3>
-      <p>Algumas cartas têm um pássaro amarelo. Quem recolher a primeira dessas cartas fica com o <strong>token do pássaro</strong> (vale +5 pontos no fim). Para roubar o token, tens de acumular <em>mais</em> cartas com pássaro do que o detentor atual. Em caso de empate, o token não se move.</p>
-
-      <h3>Os nenúfares</h3>
-      <p>Certas cartas têm nenúfares coloridos. Coleciona as quatro cores para ganhar <strong>+10 pontos bónus</strong> no final.</p>
-      <ul>
-        <li><span class="rule-tag" style="background:#fff3c8;color:#7a5000;border-color:#e8c060">Amarelo</span>
-            <span class="rule-tag" style="background:#ffe8e0;color:#8a2810;border-color:#e8a090">Vermelho</span>
-            <span class="rule-tag" style="background:#e8eef4;color:#3a5068;border-color:#a8c0d0">Branco</span>
-            <span class="rule-tag blue">Azul</span> — quatro cores, +10 pontos</li>
-      </ul>
-
-      <h3>O baralho</h3>
-      <p>O baralho de 36 cartas é jogado duas vezes. Quando acaba pela primeira vez, baralha-se o descarte e continua. Quando acaba pela segunda vez, o jogo termina e contam-se os pontos.</p>
-
-      <h3>Pontuação final</h3>
-      <ul>
-        <li>Cada <strong>capivara</strong> nas cartas recolhidas = <strong>1 ponto</strong></li>
-        <li>Token do <strong>pássaro</strong> = <strong>+5 pontos</strong></li>
-        <li>Quatro cores de <strong>nenúfar</strong> = <strong>+10 pontos</strong></li>
-      </ul>
-      <p style="margin-top:10px;font-style:italic;color:var(--muted)">Arrisca, petisca, e que as capivaras estejam do teu lado.</p>
-    </div>
-  </div>
-</div>
-<!-- GAME OVER -->
-<div class="overlay" id="overlay-gameover">
-  <div class="modal">
-    <h2>Fim do Jogo</h2>
-    <div id="final-scores"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" id="btn-restart" style="display:none">Jogar Novamente</button>
-      <button class="btn btn-outline"  id="btn-goto-lobby">Voltar ao Lobby</button>
-    </div>
-  </div>
-</div>
-
-<script>
-let ws,myName='',myToken='',myLobbySeat=-1,myLobbyId='',isSolo=false;
-let state=null,myGameSeat=-1,isHost=false,waitLobby=null;
-let reconnectAttempts=0,reconnectTimer=null;
-
-const LL = { Y:'Amarelo', R:'Vermelho', W:'Branco', B:'Azul' };
-const LI = { Y:'lily-Y', R:'lily-R', W:'lily-W', B:'lily-B' };
-const LE = { Y:'●', R:'●', W:'●', B:'●' };
-const LC = { Y:'#e8a820', R:'#d85030', W:'#8898a8', B:'#4898c8' };
-
-function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-function openOverlay(id){ document.getElementById(id).classList.add('active'); }
-function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
-function send(msg){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(msg)); }
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-let _nt;
-function notif(t,d=3200){ const e=document.getElementById('notif'); e.textContent=t; e.classList.add('show'); clearTimeout(_nt); _nt=setTimeout(()=>e.classList.remove('show'),d); }
-
-function cardArtHTML(card){
-  const src='/cards/'+card.img+'.png';
-  return '<div class="card-art-wrap">'+
-    '<img class="card-art" src="'+src+'" alt="" onerror="capImgErr(this)">'+
-    '<div class="card-art-fallback hidden">'+card.cap+'</div>'+
-  '</div>';
-}
-
-// ── AUDIO ENGINE ─────────────────────────────────────────────────────────────
-let _actx = null;
-function getCtx(){ if(!_actx) _actx = new (window.AudioContext||window.webkitAudioContext)(); if(_actx.state==='suspended') _actx.resume(); return _actx; }
-
-// Rubber duck squeak — when YOU pick a card
-function playDuck(){
-  try{
-    const ctx=getCtx(), now=ctx.currentTime;
-    const osc=ctx.createOscillator(), g=ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
-    osc.type='sine';
-    osc.frequency.setValueAtTime(520, now);
-    osc.frequency.exponentialRampToValueAtTime(280, now+0.08);
-    osc.frequency.exponentialRampToValueAtTime(350, now+0.14);
-    g.gain.setValueAtTime(0.25, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
-    osc.start(now); osc.stop(now+0.22);
-  }catch(e){}
-}
-
-// Bird tweet — when someone wins the bird token
-function playTweet(){
-  try{
-    const ctx=getCtx();
-    [0, 0.14, 0.26].forEach((delay,i)=>{
-      const now=ctx.currentTime+delay;
-      const osc=ctx.createOscillator(), g=ctx.createGain();
-      osc.connect(g); g.connect(ctx.destination);
-      osc.type='sine';
-      const f0=1400+i*200;
-      osc.frequency.setValueAtTime(f0, now);
-      osc.frequency.exponentialRampToValueAtTime(f0*1.8, now+0.06);
-      osc.frequency.exponentialRampToValueAtTime(f0*1.4, now+0.10);
-      g.gain.setValueAtTime(0.18, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
-      osc.start(now); osc.stop(now+0.12);
-    });
-  }catch(e){}
-}
-
-// Wooden knock — when an opponent bets
-function playKnock(){
-  try{
-    const ctx=getCtx(), now=ctx.currentTime;
-    const buf=ctx.createBuffer(1,ctx.sampleRate*0.12,ctx.sampleRate);
-    const data=buf.getChannelData(0);
-    for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.018));
-    const src=ctx.createBufferSource(), g=ctx.createGain();
-    const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=320;
-    src.buffer=buf; src.connect(filt); filt.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.55, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
-    src.start(now);
-  }catch(e){}
-}
-
-
-
-
-// Track bets: knock every time the total count increments
-let _prevBetCount = -1;
-function checkNewBets(betsPlaced){
-  const n = betsPlaced.filter(Boolean).length;
-  if(_prevBetCount === -1){ _prevBetCount = n; return; }
-  if(n > _prevBetCount) playKnock();
-  _prevBetCount = n;
-}
-
-// Track bird holder to detect token win
-let _prevBirdHolder = -99;
-function checkBirdChange(holder){
-  if(_prevBirdHolder===-99){ _prevBirdHolder=holder; return; }
-  if(holder!==null && holder!==_prevBirdHolder) playTweet();
-  _prevBirdHolder = holder;
-}
-
-// Unlock audio on first interaction
-let _audioUnlocked = false;
-function unlockAudio(){
-  if(_audioUnlocked) return;
-  _audioUnlocked = true;
-  getCtx();
-}
-document.addEventListener('pointerdown', unlockAudio, {once:true});
-
-// Image load helpers — called via inline onload/onerror (avoids quote-escaping issues)
-function capImgOk(img){ img.nextElementSibling.classList.add('hidden'); }
-function capImgErr(img){ img.style.display='none'; img.nextElementSibling.classList.remove('hidden'); }
-
-function connect(){
-  const proto=location.protocol==='https:'?'wss://':'ws://';
-  ws=new WebSocket(proto+location.host);
-  ws.onopen=()=>{ reconnectAttempts=0; const t=sessionStorage.getItem('cap_token'); if(t) send({type:'RECONNECT',token:t}); else send({type:'LOBBIES'}); };
-  ws.onmessage=e=>{ try{ handleMsg(JSON.parse(e.data)); }catch{} };
-  ws.onclose=()=>scheduleReconnect();
-  ws.onerror=()=>{};
-}
-function scheduleReconnect(){ clearTimeout(reconnectTimer); const d=Math.min(500*Math.pow(1.5,reconnectAttempts),12000); reconnectAttempts++; reconnectTimer=setTimeout(connect,d); }
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&(!ws||ws.readyState>1)){ reconnectAttempts=0; connect(); } });
-setInterval(()=>send({type:'PING'}),15000);
-
-function handleMsg(msg){
-  switch(msg.type){
-    case 'PONG': break;
-    case 'LOBBIES': renderLobbyList(msg.lobbies); break;
-    case 'JOINED':
-      myToken=msg.token; myLobbySeat=msg.seat; myLobbyId=msg.lobbyId;
-      isSolo=msg.solo; isHost=msg.seat===0; myGameSeat=msg.seat;
-      sessionStorage.setItem('cap_token',myToken);
-      if(!isSolo){ waitLobby=msg.lobby; renderWaitRoom(msg); showScreen('screen-wait'); }
-      break;
-    case 'LOBBY_STATE': myLobbySeat=msg.myLobbySeat; isHost=msg.myLobbySeat===0; waitLobby=msg.lobby; renderWaitRoom(msg); break;
-    case 'PLAYER_JOINED': waitLobby=msg.lobby; notif(msg.name+' entrou na mesa'); if(document.getElementById('screen-wait').classList.contains('active')) send({type:'REQUEST_STATE'}); break;
-    case 'PLAYER_LEFT':   waitLobby=msg.lobby; notif('Um jogador saiu.'); if(document.getElementById('screen-wait').classList.contains('active')) send({type:'REQUEST_STATE'}); break;
-    case 'GAME_STATE':
-      state=msg.state; myGameSeat=state.mySeat; isSolo=state.isSolo;
-      checkNewBets(state.betsPlaced);
-      checkBirdChange(state.birdHolder);
-      closeOverlay('overlay-gameover'); showScreen('screen-game'); renderGame(); startAmbient();
-      if(state.phase==='GAME_OVER') showGameOver();
-      break;
-    case 'RECONNECTED':
-      myToken=sessionStorage.getItem('cap_token')||''; myLobbySeat=msg.seat;
-      myGameSeat=msg.gameSeat!==undefined?msg.gameSeat:msg.seat; isSolo=msg.solo; isHost=msg.seat===0;
-      notif('Reconectado!'); send({type:'REQUEST_STATE'}); break;
-    case 'RECONNECT_FAIL': sessionStorage.removeItem('cap_token'); myToken=''; myName=''; showScreen('screen-name'); break;
-    case 'OPPONENT_DISCONNECTED_GRACE': notif(msg.name+' desligou-se. '+Math.round(msg.graceMs/1000)+'s...',6000); break;
-    case 'OPPONENT_RECONNECTED': notif(msg.name+' voltou!'); break;
-    case 'OPPONENT_LEFT': notif('Um oponente saiu.',5000); break;
-    case 'ERROR': notif('Erro: '+msg.text,4000); break;
-  }
-}
-
-// Cache latest lobby data so we can render immediately when screen-lobby opens
-let _cachedLobbies = [];
-function renderLobbyList(lobbies){
-  _cachedLobbies = lobbies;
-  // Only switch to lobby screen if user has already entered their name
-  if(myName) showScreen('screen-lobby');
-  const el=document.getElementById('lobby-list'); if(!el) return; el.innerHTML='';
-  lobbies.forEach(l=>{
-    const full=l.full||l.playing;
-    const status=l.playing?'A jogar':(l.seated>0?l.seated+'/'+l.maxHuman+' jog.':'Vazia');
-    const bc=l.playing?'badge-orange':(l.seated>0?'badge-green':'badge-gray');
-    const row=document.createElement('div'); row.className='lobby-row'+(full?' full':'');
-    row.innerHTML='<div><div class="lobby-name">'+esc(l.name)+'</div>'+
-      '<div class="lobby-meta">'+(l.solo?'Solo contra 2 IAs':'2 a 6 jogadores')+'</div></div>'+
-      '<div style="display:flex;gap:8px;align-items:center"><span class="badge '+bc+'">'+status+'</span>'+
-      '<button class="join-btn"'+(full?' disabled':'')+'>Entrar</button></div>';
-    if(!full) row.querySelector('.join-btn').onclick=()=>send({type:'JOIN_LOBBY',lobbyId:l.id,playerName:myName});
-    el.appendChild(row);
-  });
-}
-
-function renderWaitRoom(msg){
-  const lobby=msg.lobby||waitLobby; if(!lobby) return;
-  document.getElementById('wait-title').textContent=lobby.name+' — A aguardar...';
-  const pp=document.getElementById('wait-players'); pp.innerHTML='';
-  (lobby.names||[]).forEach((name,i)=>{
-    if(!name) return;
-    const d=document.createElement('div'); d.className='wait-player'+(i===myLobbySeat?' me':'');
-    d.textContent=name+(i===0?' (anfitriao)':'')+(i===myLobbySeat?' — tu':''); pp.appendChild(d);
-  });
-  const seated=(lobby.names||[]).filter(Boolean).length;
-  if(isHost){
-    document.getElementById('wait-host-area').style.display='block';
-    document.getElementById('wait-guest-msg').style.display='none';
-    const btn=document.getElementById('btn-start');
-    btn.disabled=seated<2;
-    btn.textContent='Iniciar Jogo ('+seated+' jogador'+(seated!==1?'es':'')+')';
-  } else {
-    document.getElementById('wait-host-area').style.display='none';
-    document.getElementById('wait-guest-msg').style.display='block';
-  }
-}
-
-function renderGame(){
-  if(!state) return;
-
-  /* players bar */
-  const bar=document.getElementById('players-bar'); bar.innerHTML='';
-  state.players.forEach((p,i)=>{
-    const chip=document.createElement('div');
-    chip.className='player-chip'+(p.isMe?' me':'')+(p.hasBird?' bird':'');
-
-    const nameDiv=document.createElement('div'); nameDiv.className='pname';
-    nameDiv.textContent=p.name;
-    if(p.isMe){ const tu=document.createElement('span'); tu.style.cssText='color:var(--amber);font-size:.58rem'; tu.textContent=' (tu)'; nameDiv.appendChild(tu); }
-    chip.appendChild(nameDiv);
-
-    const ptsDiv=document.createElement('div'); ptsDiv.className='ppts';
-    ptsDiv.textContent=p.pts;
-    const ptsSub=document.createElement('span'); ptsSub.style.cssText='font-size:.65rem;font-weight:400;color:var(--muted)'; ptsSub.textContent=' pts';
-    ptsDiv.appendChild(ptsSub); chip.appendChild(ptsDiv);
-
-    const lilDiv=document.createElement('div'); lilDiv.className='plilies';
-    if(p.lilies.length===0){ const dash=document.createElement('span'); dash.style.opacity='.35'; dash.textContent='—'; lilDiv.appendChild(dash); }
-    else p.lilies.forEach(l=>{ const s=document.createElement('span'); s.style.cssText='color:'+LC[l]+';font-size:.9em'; s.title='Nenufar '+LL[l]; s.textContent='●'; lilDiv.appendChild(s); });
-    if(p.birdCards>0){
-      const bc=document.createElement('span'); bc.className='bird-count'; bc.title='Cartas com passaro';
-      const bimg=document.createElement('img'); bimg.src='/bird.png'; bimg.className='bird-pip'; bimg.alt='';
-      bc.appendChild(bimg); bc.appendChild(document.createTextNode(p.birdCards));
-      lilDiv.appendChild(bc);
-    }
-    chip.appendChild(lilDiv);
-
-    const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):(state.phase==='REVEAL'&&state.betsPlaced[i]!=null?'Apostou':'[Zzz...]');
-    const bsDiv=document.createElement('div'); bsDiv.className='pbet'; bsDiv.textContent=bs; chip.appendChild(bsDiv);
-
-    bar.appendChild(chip);
-  });
-
-  /* table cards */
-  const area=document.getElementById('table-cards'); area.innerHTML='';
-  area.style.setProperty('--n-cards', state.n);
-  (state.table||[]).forEach((card,pos)=>{
-    const div=document.createElement('div');
-    let cls='cap-card', extra='';
-    if(state.phase==='REVEAL'&&state.lastResult){
-      cls+=' reveal-card';
-      const w=state.lastResult.winners;
-      if(w&&w[pos]!==undefined){
-        cls+=' won';
-        extra='<div class="card-result-label win">'+esc(state.players[w[pos]].name)+'</div>';
-      } else { cls+=' nobody'; extra='<div class="card-result-label nobody">Ninguem</div>'; }
-    } else if(state.phase==='BETTING'&&state.myBet===pos){ cls+=' selected'; }
-
-    const lilyB=card.lilies.map(l=>'<span class="lily '+LI[l]+'">'+LL[l]+'</span>').join('');
-    const birdB=card.bird?'<span class="lily lily-bird">Passaro</span>':'';
-    const capWord=card.cap===1?'capivara':'capivaras';
-
-    div.className=cls;
-    div.innerHTML=
-      cardArtHTML(card)+
-      '<div class="card-pos-badge">'+String.fromCharCode(64+pos+1)+'</div>'+
-      '<div class="card-info">'+
-        '<div class="card-caps-count">'+card.cap+' '+capWord+'</div>'+
-        '<div class="card-badges">'+lilyB+birdB+'</div>'+
-      '</div>'+extra;
-
-    if(state.phase==='BETTING'&&state.myBet===null){
-      div.onclick=()=>{ playDuck(); send({type:'BET',position:pos}); state.myBet=pos; renderGame(); };
-    }
-    area.appendChild(div);
-  });
-
-  /* status */
-  const badge=document.getElementById('phase-badge'), text=document.getElementById('status-text'), cnt=document.getElementById('bet-count');
-  badge.className='phase-badge phase-'+state.phase;
-  if(state.phase==='BETTING'){
-    badge.textContent='A Apostar';
-    const placed=state.betsPlaced.filter(Boolean).length;
-    cnt.textContent=placed+'/'+state.n+' apostas';
-    text.textContent=state.myBet===null?'Escolhe uma carta para apostar':'Apostaste na carta '+String.fromCharCode(64+state.myBet+1)+' — a aguardar os outros...';
-  } else if(state.phase==='REVEAL'){
-    badge.textContent='Revelacao'; cnt.textContent='';
-    const bu=state.lastResult&&state.lastResult.birdUpdate;
-    if(bu){if(bu.type==='first')text.textContent=bu.name+' recebeu o token do pássaro!';else if(bu.type==='steal')text.textContent=bu.name+' destronou '+bu.fromName+' e ficou com o token!';else if(bu.type==='tie_first')text.textContent='Empate! Ninguém ficou com o token do pássaro.';else if(bu.type==='tie_steal')text.textContent='Empate! O token do pássaro mantém-se com o detentor atual.';}
-    else { const w=Object.keys((state.lastResult&&state.lastResult.winners)||{}).length; text.textContent=w>0?w+' carta'+(w!==1?'s':'')+' recolhida'+(w!==1?'s':'')+'!':'Ninguem ganhou — todos empataram!'; }
-  } else { badge.textContent='Fim do Jogo'; text.textContent='A contabilizar pontos...'; cnt.textContent=''; }
-
-  /* my scored */
-  const sc=document.getElementById('my-scored'); sc.innerHTML='';
-  const me=state.players[myGameSeat];
-  if(!me||me.scored.length===0){
-    const empty=document.createElement('div'); empty.style.cssText='color:var(--muted);font-size:.82rem;padding:4px 0';
-    empty.textContent='Ainda sem cartas recolhidas.'; sc.appendChild(empty);
-  } else me.scored.forEach(mc=>{
-    const wrap=document.createElement('div'); wrap.className='mini-card';
-    // art
-    const artImg=document.createElement('img'); artImg.className='mini-card-art';
-    artImg.src='/cards/'+mc.img+'.png'; artImg.alt='';
-    artImg.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };
-    const artFb=document.createElement('div'); artFb.className='mini-card-art fallback'; artFb.style.display='none'; artFb.textContent=mc.cap;
-    wrap.appendChild(artImg); wrap.appendChild(artFb);
-    // label
-    const lbl=document.createElement('div'); lbl.className='mini-card-label';
-    const capWord=mc.cap===1?'capivara':'capivaras';
-    lbl.textContent=mc.cap+' '+capWord;
-    if(mc.lilies.length||mc.bird){
-      const badges=document.createElement('div'); badges.className='mini-card-badges';
-      mc.lilies.forEach(l=>{ const s=document.createElement('span'); s.className='mini-lily lily-'+l; s.textContent=LL[l]; badges.appendChild(s); });
-      if(mc.bird){ const b=document.createElement('span'); b.className='mini-lily lily-bird'; b.textContent='Passaro'; badges.appendChild(b); }
-      lbl.appendChild(badges);
-    }
-    wrap.appendChild(lbl);
-    sc.appendChild(wrap);
-  });
-
-  /* bird token */
-  const bt=document.getElementById('bird-token-display');
-  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> Passaro — sem detentor'; bt.className='bird-token'; }
-  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
-
-  /* deck */
-  document.getElementById('deck-info').textContent=
-    state.deckPass===0?'1.a passagem — '+state.deckLeft+' cartas':'2.a passagem — '+state.deckLeft+' cartas';
-}
-
-function showGameOver(){
-  const el=document.getElementById('final-scores'); el.innerHTML='';
-  (state.finalScores||state.players).forEach((s,i)=>{
-    const isW=i===state.winnerIdx;
-    const d=[];
-    if(s.birdCards>0) d.push('Passaro x'+s.birdCards);
-    if(s.hasBird) d.push('+5 token');
-    if(s.allLilies) d.push('+10 quatro nenufares!');
-    const row=document.createElement('div'); row.className='score-row';
-    row.innerHTML=
-      '<div>'+
-        '<div class="score-name">'+esc(s.name)+(isW?' <span class="winner-badge">Vencedor</span>':'')+'</div>'+
-        '<div class="score-detail">'+(d.join(' · ')||'so capivaras')+'</div>'+
-      '</div>'+
-      '<div class="score-pts">'+s.pts+' pts</div>';
-    el.appendChild(row);
-  });
-  document.getElementById('btn-restart').style.display=(isSolo||isHost)?'inline-flex':'none';
-  openOverlay('overlay-gameover');
-}
-
-// ── VIDEO RULES ──────────────────────────────────────────────────────────────
-function checkVideoExists(){
-  fetch('/regras.mp4', {method:'HEAD'}).then(r=>{
-    const wrap=document.getElementById('video-wrap');
-    const missing=document.getElementById('video-missing');
-    const playIcon=document.getElementById('play-icon');
-    if(r.ok){
-      if(missing) missing.style.display='none';
-      if(playIcon) playIcon.style.display='flex';
-    } else {
-      if(playIcon) playIcon.style.display='none';
-      if(missing) missing.style.display='block';
-    }
-  }).catch(()=>{
-    const pi=document.getElementById('play-icon'); if(pi) pi.style.display='none';
-  });
-}
-function playRulesVideo(){
-  const video=document.getElementById('rules-video');
-  const wrap=document.getElementById('video-wrap');
-  const pi=document.getElementById('play-icon');
-  const lbl=wrap.querySelector('.video-label');
-  if(!video) return;
-  video.src='/regras.mp4';
-  video.style.display='block';
-  if(pi) pi.style.display='none';
-  if(lbl) lbl.style.display='none';
-  video.play().catch(()=>{});
-}
-// Check video on load
-if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', checkVideoExists);
-else checkVideoExists();
-
-// ── RULES TOGGLE ─────────────────────────────────────────────────────────────
-function toggleRules(){
-  const body=document.getElementById('rules-body');
-  const btn=document.getElementById('rules-toggle');
-  if(!body||!btn) return;
-  const open=body.classList.toggle('open');
-  btn.classList.toggle('open', open);
-}
-
-document.getElementById('inp-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('btn-go').click(); });
-document.getElementById('btn-go').onclick=()=>{
-  const n=document.getElementById('inp-name').value.trim();
-  if(!n){ notif('Precisas de um nome!'); return; }
-  myName=n.slice(0,20); showScreen('screen-lobby');
-  if(_cachedLobbies.length) renderLobbyList(_cachedLobbies);
-  if(!ws||ws.readyState>1) connect(); else send({type:'LOBBIES'});
-};
-document.getElementById('btn-back-name').onclick=()=>showScreen('screen-name');
-document.getElementById('btn-start').onclick=()=>{ document.getElementById('btn-start').disabled=true; send({type:'START'}); };
-document.getElementById('btn-leave-wait').onclick=()=>{ send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; myLobbyId=''; myLobbySeat=-1; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
-document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
-document.getElementById('btn-restart').onclick=()=>{ closeOverlay('overlay-gameover'); send({type:'RESTART'}); };
-document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
-
-if(sessionStorage.getItem('cap_token')) connect();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
-
-// ── Ambient audio ────────────────────────────────────────
-let ambientPlaying=false;
-const ambEl=()=>document.getElementById('ambient-audio');
-
-function setAmbientUI(playing){
-  ambientPlaying=playing;
-  const icon=document.getElementById('amb-icon');
-  const lbl=document.getElementById('amb-label');
-  if(icon) icon.textContent=playing?'🔊':'🔇';
-  if(lbl)  lbl.textContent=playing?'Som':'Som';
-}
-
-function startAmbient(){
-  const a=ambEl(); if(!a||ambientPlaying) return;
-  a.volume=0.35;
-  a.play().then(()=>setAmbientUI(true)).catch(()=>setAmbientUI(false));
-}
-
-function toggleAmbient(){
-  const a=ambEl(); if(!a) return;
-  if(ambientPlaying){ a.pause(); setAmbientUI(false); }
-  else { startAmbient(); }
-}
-
-// Stop when leaving game
-document.getElementById('btn-leave-game').addEventListener('click',()=>{
-  const a=ambEl(); if(a){a.pause();a.currentTime=0;} setAmbientUI(false);
+server.on('upgrade',(req,socket,head)=>{
+  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));
 });
 
-</script>
-</body>
-</html>`;
+setInterval(()=>{for(const ws of wss.clients)if(ws.readyState===1)ws.ping();},25000);
+server.listen(PORT,'0.0.0.0',()=>console.log(`[Catania] http://0.0.0.0:${PORT}`));

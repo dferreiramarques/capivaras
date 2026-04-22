@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0d0b08">
+<title>Catania</title>
+<style>
+/* Critical: hide body until fonts load to eliminate FOUT */
+html{visibility:hidden}
+html.fonts-loaded{visibility:visible}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Spectral:ital,wght@0,300;0,400;1,300&display=block" rel="stylesheet">
+<style>
+:root{
+  --gold:#c9a84c;--gold-l:#e8c97a;--gold-d:#8b6914;
+  --parch:#f2e8d0;--parch-d:#d9c89a;
+  --ink:#1a1208;--red-s:#c0392b;--stone:#7a7060;
+  --bg:#0d0b08;--panel:#1e1a10;--panel2:#2a2418;--border:#4a3c1a;
+  /* TYPE SCALE — 6 sizes */
+  --fs-xl:  clamp(2.6rem,7vw,5rem);
+  --fs-lg:  1.9rem;
+  --fs-md:  1.3rem;
+  --fs-base:1rem;
+  --fs-sm:  0.78rem;
+  --fs-xs:  0.6rem;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--parch);font-family:'Spectral',Georgia,serif;font-weight:300;font-size:16px;height:100%;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:0.35}
+button{cursor:pointer;border:none;font:inherit}
+input{font:inherit}
+.screen{display:none;width:100%;height:100%;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.screen.active{display:flex}
+::-webkit-scrollbar{width:7px;height:7px}
+::-webkit-scrollbar-track{background:var(--panel)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(90px);background:#2a2418;color:var(--parch);border:1px solid var(--gold-d);padding:13px 26px;border-radius:4px;font-size:var(--fs-base);z-index:9998;transition:transform .3s;pointer-events:none;max-width:88vw;text-align:center}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+/* Buttons */
+.btn{background:linear-gradient(135deg,var(--gold-d),var(--gold));border:none;border-radius:4px;color:var(--ink);cursor:pointer;font-family:'Cinzel',serif;font-size:var(--fs-base);font-weight:600;letter-spacing:.08em;padding:.9rem 2.5rem;text-transform:uppercase;transition:all .2s}
+.btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn.sec{background:var(--panel2);border:1px solid var(--border);color:var(--parch-d)}
+.btn.sec:hover{border-color:var(--gold-d);color:var(--parch);transform:translateY(-1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* NAME */
+#s-name{background:radial-gradient(ellipse at 50% 40%,#2a1f08 0%,var(--bg) 70%);gap:0}
+.name-box{text-align:center;display:flex;flex-direction:column;align-items:center;gap:1.3rem}
+.name-box h1{font-family:'Cinzel',serif;font-size:var(--fs-xl);font-weight:900;color:var(--gold);text-shadow:0 0 60px rgba(201,168,76,.4),0 2px 0 #000;letter-spacing:.12em}
+.name-box .sub{font-style:italic;color:var(--parch-d);font-size:var(--fs-md)}
+.name-box .era{color:var(--gold-d);font-size:var(--fs-base);font-family:'Cinzel',serif}
+.name-wrap{display:flex;flex-direction:column;align-items:center;gap:.9rem;margin-top:1rem}
+.name-wrap label{font-family:'Cinzel',serif;font-size:var(--fs-base);letter-spacing:.1em;color:var(--gold-l);text-transform:uppercase}
+.name-wrap input{background:var(--panel2);border:2px solid var(--gold-d);border-radius:4px;color:var(--parch);font-family:'Cinzel',serif;font-size:var(--fs-md);padding:.8rem 2rem;text-align:center;width:300px;outline:none;transition:border-color .2s}
+.name-wrap input:focus{border-color:var(--gold)}
+
+/* LOBBY */
+#s-lobby{justify-content:flex-start;overflow-y:auto}
+.lobby-content{width:100%;max-width:1050px;padding:1.8rem}
+.lobby-hdr{text-align:center;padding:1.5rem 0 1.8rem;border-bottom:1px solid var(--border);margin-bottom:1.8rem}
+.lobby-hdr h2{font-family:'Cinzel',serif;font-size:var(--fs-lg);color:var(--gold);letter-spacing:.08em}
+.lobby-hdr p{color:var(--parch-d);font-style:italic;margin-top:.3rem;font-size:var(--fs-base)}
+.tables-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1.2rem}
+.tcard{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:1.4rem;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.tcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold-d),var(--gold));opacity:0;transition:opacity .2s}
+.tcard:hover{border-color:var(--gold-d);transform:translateY(-2px)}
+.tcard:hover::before{opacity:1}
+.tcard.disabled{opacity:.5;cursor:not-allowed;transform:none}
+.tcard h3{font-family:'Cinzel',serif;font-size:var(--fs-base);color:var(--gold-l);margin-bottom:.5rem;letter-spacing:.04em}
+.tag{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:3px;color:var(--parch-d);font-size:var(--fs-sm);letter-spacing:.04em;padding:2px 9px;margin-bottom:.7rem;text-transform:uppercase;font-family:'Cinzel',serif}
+.tag.ai{border-color:var(--gold-d);color:var(--gold-d)}
+.seats{display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0}
+.sdot{width:30px;height:30px;border-radius:50%;border:2px solid var(--border);background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-family:'Cinzel',serif}
+.sdot.f{background:var(--gold-d);border-color:var(--gold);color:var(--ink)}
+.sdot.b{background:#1a3a2a;border-color:#2a6a4a;color:#5a9a7a}
+.tstat{font-size:var(--fs-sm);color:var(--stone);margin-top:.5rem}
+.tstat.open{color:#7ab070}
+.tstat.full{color:var(--red-s)}
+
+/* WAITING */
+#s-wait{background:var(--bg)}
+.wbox{max-width:520px;width:90%;text-align:center}
+.wbox h2{font-family:'Cinzel',serif;font-size:var(--fs-lg);color:var(--gold);margin-bottom:.75rem}
+.wseats{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap;margin:1.4rem 0}
+.wseat{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:.9rem 1.3rem;min-width:130px}
+.wseat .slbl{font-size:var(--fs-sm);color:var(--stone);text-transform:uppercase;font-family:'Cinzel',serif;letter-spacing:.04em}
+.wseat .snm{font-size:var(--fs-base);color:var(--parch);margin-top:.2rem}
+.wseat.me .snm{color:var(--gold)}
+.wseat.empty .snm{color:var(--stone);font-style:italic}
+.whint{color:var(--parch-d);font-style:italic;margin:.9rem 0;font-size:var(--fs-base)}
+.whint.pulse{animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.wacts{display:flex;gap:.9rem;justify-content:center;margin-top:1.4rem;flex-wrap:wrap}
+
+/* ═══════════════════════════════════════════════════
+   GAME LAYOUT — sidebar fixed right, full height
+   ═══════════════════════════════════════════════════ */
+#s-game{flex-direction:row;overflow:hidden;justify-content:flex-start;align-items:stretch}
+
+/* Left column: header + board + hand */
+.game-left{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+
+/* Top bar */
+.gtop{background:var(--panel);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;flex-shrink:0}
+.gtop h3{font-family:'Cinzel',serif;color:var(--gold);font-size:var(--fs-md);letter-spacing:.12em}
+.sp{flex:1}
+.tind{font-family:'Cinzel',serif;font-size:var(--fs-base);background:var(--panel2);border:1px solid var(--border);padding:.3rem .9rem;border-radius:3px;color:var(--parch-d)}
+.tind.mt{color:var(--gold);border-color:var(--gold-d)}
+
+/* Player bar */
+.player-bar{display:flex;gap:.5rem;padding:.55rem 1rem;background:var(--panel2);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:stretch;flex-shrink:0;overflow-x:auto}
+.pcard{display:flex;align-items:center;gap:.5rem;background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:.4rem .75rem;flex:1;min-width:130px;max-width:240px}
+.pcard.ct{border-color:var(--gold-d);background:rgba(201,168,76,.06)}
+.pdot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.pnl{font-size:var(--fs-base);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pvills{display:flex;gap:3px;flex-shrink:0}
+.vp{width:11px;height:11px;border-radius:2px;background:var(--border)}
+.vp.b{background:var(--gold)}
+.pscore{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--gold-d);white-space:nowrap;flex-shrink:0}
+
+/* Board — Mediterranean sea */
+.gboard{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;
+  background:
+    radial-gradient(ellipse at 50% 55%, #1e5a8a 0%, #0e3460 35%, #071e3d 65%, #030e1e 100%);
+}
+.gboard::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Cpath d='M0 30 Q15 18 30 30 Q45 42 60 30 Q75 18 90 30 Q105 42 120 30' fill='none' stroke='white' stroke-width='1.2' opacity='0.06'/%3E%3Cpath d='M0 50 Q15 38 30 50 Q45 62 60 50 Q75 38 90 50 Q105 62 120 50' fill='none' stroke='white' stroke-width='1' opacity='0.04'/%3E%3Cpath d='M0 10 Q15 -2 30 10 Q45 22 60 10 Q75 -2 90 10 Q105 22 120 10' fill='none' stroke='white' stroke-width='1' opacity='0.04'/%3E%3C/svg%3E");
+  background-size:120px 60px;
+}
+/* Map fills 80% of board area, preserving aspect ratio */
+#bwrap{position:relative;z-index:1;width:96%;height:96%;display:flex;align-items:center;justify-content:center}
+#bwrap svg{width:100%;height:100%;max-width:100%;max-height:100%}
+
+/* RIGHT SIDEBAR — full height */
+.gside{width:420px;min-width:320px;background:var(--panel);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;height:100%;
+  box-shadow:-12px 0 40px rgba(0,0,0,.75);}
+.ssec{padding:1rem 1.1rem;border-bottom:1px solid var(--border)}
+.ssec h4{font-family:'Cinzel',serif;font-size:var(--fs-base);letter-spacing:.08em;color:var(--gold-d);text-transform:uppercase;margin-bottom:.8rem}
+
+/* Resource piles */
+.rpiles{display:flex;flex-direction:column;gap:.55rem}
+.prow{display:flex;align-items:center;gap:.6rem;background:var(--panel2);border-radius:4px;padding:.45rem .7rem;border:1px solid var(--border)}
+.ricon{font-size:var(--fs-md);width:30px;text-align:center}
+.rnm{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--parch-d);width:72px}
+.rcnt{font-size:var(--fs-base);color:var(--stone);margin-left:auto}
+.rdv{background:var(--ink);border:1.5px solid var(--gold-d);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--gold);flex-shrink:0}
+.rdv.red{border-color:var(--red-s);color:var(--red-s)}
+
+/* Tower */
+.tdisc-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.td{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:var(--fs-sm);font-weight:600;flex-shrink:0}
+.td.bl{background:var(--ink);border:1.5px solid var(--gold-d);color:var(--gold)}
+.td.rd{background:#2a0808;border:1.5px solid var(--red-s);color:var(--red-s)}
+.td.top{box-shadow:0 0 6px rgba(201,168,76,.7)}
+
+/* Log */
+.log-box{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto}
+.log-entry{font-size:var(--fs-sm);color:var(--stone);padding:1px 4px;border-radius:2px}
+.log-entry.hl{color:var(--gold-l)}
+
+/* Actions */
+.apanel{padding:1rem 1.1rem;background:var(--panel2);border-top:1px solid var(--border)}
+.apanel h4{font-family:'Cinzel',serif;font-size:var(--fs-base);color:var(--gold-d);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.7rem}
+.abtns{display:flex;flex-direction:column;gap:.55rem}
+.abtn{background:var(--panel);border:1px solid var(--border);border-radius:4px;color:var(--parch);cursor:pointer;padding:.65rem .9rem;font-family:'Spectral',serif;font-size:var(--fs-base);text-align:left;transition:all .15s}
+.abtn:hover:not(:disabled){border-color:var(--gold-d);color:var(--gold-l)}
+.abtn:disabled{opacity:.38;cursor:not-allowed}
+.abtn.pri{border-color:var(--gold-d);background:rgba(201,168,76,.08);color:var(--gold-l)}
+.abtn.act{border-color:var(--gold);background:rgba(201,168,76,.16);color:var(--gold)}
+
+/* Hand footer — 200% cards */
+.hand-footer{background:var(--panel);border-top:1px solid var(--border);padding:.65rem 1rem;display:flex;align-items:center;gap:.9rem;flex-shrink:0;min-height:150px;flex-wrap:wrap}
+.hand-lbl{font-family:'Cinzel',serif;font-size:var(--fs-base);color:var(--gold-d);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;flex-shrink:0;line-height:1.5}
+.hcards{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;padding-bottom:4px}
+/* Cards at 200% (was 40×54, now 80×108) */
+.card{width:80px;height:108px;border-radius:7px;border:2px solid rgba(255,255,255,.14);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex-shrink:0;gap:3px}
+.card:hover{transform:translateY(-7px);filter:brightness(1.2)}
+.card.sel{transform:translateY(-10px);border-color:var(--gold);box-shadow:0 0 14px rgba(201,168,76,.5)}
+.card .ci{font-size:var(--fs-lg)}
+.card .ct{font-size:var(--fs-sm);font-family:'Cinzel',serif;color:rgba(255,255,255,.7);text-align:center}
+.c-cereais{background:linear-gradient(160deg,#806010,#c09018)}
+.c-vinho{background:linear-gradient(160deg,#501040,#8a2870)}
+.c-peixe{background:linear-gradient(160deg,#0a4060,#1a6090)}
+.c-calcario{background:linear-gradient(160deg,#5a5048,#8a8070)}
+.c-azeite{background:linear-gradient(160deg,#3a5010,#6a8020)}
+
+/* VICTORY */
+#s-victory{background:radial-gradient(ellipse at 50% 40%,#2a1f08 0%,var(--bg) 70%)}
+.vbox{text-align:center;max-width:560px;padding:2.5rem}
+.vbox h2{font-family:'Cinzel',serif;font-size:var(--fs-lg);color:var(--gold);margin-bottom:.4rem}
+.vbox .vw{font-family:'Cinzel',serif;font-size:var(--fs-md);color:var(--gold-l);margin-bottom:1.8rem}
+.stbl{margin:0 auto 1.8rem;border-collapse:collapse;width:100%}
+.stbl th{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--gold-d);letter-spacing:.07em;text-transform:uppercase;padding:.45rem .65rem;border-bottom:1px solid var(--border);text-align:right}
+.stbl th:first-child{text-align:left}
+.stbl td{padding:.45rem .65rem;border-bottom:1px solid rgba(74,60,26,.3);text-align:right;font-size:var(--fs-base)}
+.stbl td:first-child{text-align:left}
+.stbl tr:first-child td{color:var(--gold);font-family:'Cinzel',serif}
+.vacts{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+
+/* Modal */
+.movl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;align-items:center;justify-content:center}
+.movl.on{display:flex}
+.mbox{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:2.4rem;max-width:580px;width:94%}
+.mbox h3{font-family:'Cinzel',serif;color:var(--gold);margin-bottom:1.1rem;font-size:var(--fs-md)}
+.mbox p{color:var(--parch-d);font-size:var(--fs-base);margin-bottom:1.4rem;line-height:1.7}
+.mbtns{display:flex;gap:.8rem;justify-content:flex-end;flex-wrap:wrap}
+.mres-opts{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.2rem}
+.mres-btn{background:var(--panel2);border:1.5px solid var(--border);border-radius:5px;padding:.65rem .9rem;cursor:pointer;font-family:'Cinzel',serif;font-size:var(--fs-base);color:var(--parch);transition:all .15s;text-align:center;min-width:80px}
+.mres-btn:hover{border-color:var(--gold-d);color:var(--gold-l)}
+.mres-btn.chosen{border-color:var(--gold);background:rgba(201,168,76,.12);color:var(--gold)}
+
+/* Rules overlay */
+.rules-ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;align-items:center;justify-content:center}
+.rules-ovl.on{display:flex}
+.rules-box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:2.4rem;max-width:820px;width:96%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.rules-box h2{font-family:'Cinzel',serif;color:var(--gold);font-size:var(--fs-md);margin-bottom:1.1rem;flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+.rules-box h2 button{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--stone);background:transparent;border:1px solid var(--border);border-radius:3px;padding:3px 10px;cursor:pointer}
+.rules-content{overflow-y:auto;font-size:var(--fs-base);line-height:1.8;color:var(--parch-d)}
+.rules-content h3{font-family:'Cinzel',serif;color:var(--gold-l);font-size:var(--fs-base);margin:16px 0 8px;letter-spacing:.04em}
+.rules-content h3:first-child{margin-top:0}
+.rules-content ul{padding-left:18px;margin-bottom:8px}
+.rules-content li{margin-bottom:4px}
+.rule-box{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:14px 18px;margin:10px 0;font-size:var(--fs-base)}
+.rule-box strong{color:var(--gold-l)}
+
+
+/* Opponent hands at top */
+.opp-hands{display:flex;gap:12px;padding:.55rem 1rem;background:rgba(10,8,4,.5);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;min-height:0;transition:min-height .2s}
+.opp-hand{display:flex;flex-direction:column;gap:4px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 10px}
+.opp-hand .oname{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--stone);letter-spacing:.04em;margin-bottom:3px;display:flex;align-items:center;gap:5px}
+.opp-hand .oname .odot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.opp-cards{display:flex;gap:3px;flex-wrap:wrap}
+/* Mini cards for opponents */
+.mini-card{width:32px;height:44px;border-radius:4px;border:1.5px solid rgba(255,255,255,.15);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-base);gap:1px}
+.mini-card .mct{font-size:var(--fs-xs);font-family:'Cinzel',serif;color:rgba(255,255,255,.6);text-align:center}
+/* Found type selector */
+.type-sel-grid{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0}
+.type-btn{background:var(--panel2);border:2px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;transition:all .15s;text-align:center;min-width:70px;font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--parch-d)}
+.type-btn:hover{border-color:var(--gold-d);color:var(--gold-l)}
+.type-btn.keep{border-color:var(--gold);background:rgba(201,168,76,.18);color:var(--gold)}
+.type-btn.discard{border-color:var(--red-s);background:rgba(192,57,43,.12);color:#e07060}
+.type-btn.disabled{opacity:.35;cursor:not-allowed}
+
+/* Fogo do Etna drag overlay */
+#etna-ovl{
+  display:none;position:fixed;inset:0;z-index:400;pointer-events:none;
+  align-items:center;justify-content:center;
+}
+#etna-ovl.on{display:flex;animation:sicelFadeIn .6s ease forwards}
+@keyframes sicelFadeIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+.sicel-msg{
+  background:rgba(18,6,2,.92);border:2px solid var(--red-s);border-radius:14px;
+  padding:32px 52px;text-align:center;max-width:560px;pointer-events:auto;
+  box-shadow:0 0 60px rgba(192,57,43,.5);
+}
+.sicel-msg .skull{font-size:var(--fs-lg);display:block;margin-bottom:8px;animation:skulPulse 1s ease-in-out infinite}
+@keyframes skulPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+.sicel-msg h3{font-family:'Cinzel',serif;color:var(--red-s);font-size:var(--fs-md);letter-spacing:.06em;margin-bottom:12px}
+.sicel-msg p{color:var(--parch-d);font-size:var(--fs-base);line-height:1.6}
+.sicel-drag-hint{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--gold-d);margin-top:10px;
+  animation:pulse 1.5s ease-in-out infinite}
+/* Hex drag targets (applied to SVG g elements via JS class) */
+.hex-drag-over polygon:first-child{
+  filter:brightness(1.5) drop-shadow(0 0 8px rgba(192,57,43,.8));
+}
+
+
+/* Village founding modal */
+#village-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;align-items:center;justify-content:center}
+#village-modal.on{display:flex}
+.vmod-box{background:var(--panel);border:1px solid var(--gold-d);border-radius:12px;padding:2.4rem;max-width:680px;width:96%;max-height:92vh;overflow-y:auto}
+.vmod-box h3{font-family:'Cinzel',serif;color:var(--gold);font-size:var(--fs-md);margin-bottom:.4rem;letter-spacing:.06em}
+.vmod-step{font-size:var(--fs-base);color:var(--stone);margin-bottom:1.2rem;font-style:italic}
+.vmod-types{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.2rem}
+.vtype-btn{background:var(--panel2);border:2px solid var(--border);border-radius:8px;padding:14px 18px;cursor:pointer;transition:all .15s;text-align:center;min-width:96px;font-family:'Cinzel',serif;font-size:var(--fs-base);color:var(--parch-d);display:flex;flex-direction:column;align-items:center;gap:6px}
+.vtype-btn:hover{border-color:var(--gold-d);color:var(--gold-l)}
+.vtype-btn.selected-keep{border-color:var(--gold);background:rgba(201,168,76,.18);color:var(--gold)}
+.vtype-btn.selected-affect{border-color:var(--red-s);background:rgba(192,57,43,.12);color:#e07060}
+.vtype-btn .vt-icon{font-size:var(--fs-lg)}
+.vtype-btn .vt-name{font-size:var(--fs-sm);letter-spacing:.04em}
+.vtype-btn .vt-cnt{font-size:var(--fs-base);font-weight:700}
+.vmod-summary{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:14px 20px;font-size:var(--fs-base);margin-bottom:1.4rem;line-height:1.7}
+.vmod-summary .keep-line{color:var(--gold-l)}
+.vmod-summary .affect-line{color:#e07060}
+.vmod-summary .keep-line{color:var(--gold-l)}
+.vmod-footer{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+/* Village cards display in hand footer */
+.villages-area{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.villages-lbl{font-family:'Cinzel',serif;font-size:var(--fs-sm);color:var(--gold-d);text-transform:uppercase;letter-spacing:.07em;line-height:1.4;white-space:nowrap}
+.village-cards{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end}
+.village-card{width:80px;height:108px;border-radius:7px;border:2px solid var(--gold-d);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6px 4px 8px;flex-shrink:0;background:var(--panel2);position:relative;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.village-card .vc-top{font-size:var(--fs-base);line-height:1}
+.village-card .vc-icon{font-size:var(--fs-md);line-height:1}
+.village-card .vc-count{font-family:'Cinzel',serif;font-weight:700;font-size:var(--fs-base);color:var(--gold);line-height:1}
+.village-card .vc-name{font-family:'Cinzel',serif;font-size:var(--fs-xs);color:var(--parch-d);text-align:center;letter-spacing:.03em;text-transform:uppercase;line-height:1.2}
+/* separator between villages and hand */
+.hand-divider{width:1px;background:var(--border);align-self:stretch;flex-shrink:0;margin:0 4px}
+@media(max-width:800px){
+  #s-game{flex-direction:column}
+  .gside{width:100%;height:auto;border-left:none;border-top:1px solid var(--border)}
+}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- RULES MODAL -->
+<div class="rules-ovl" id="rules-ovl">
+  <div class="rules-box">
+    <h2>⚑ Catania — Regras <button onclick="closeRules()">✕ Fechar</button></h2>
+    <div class="rules-content">
+      <h3>O Jogo</h3>
+      <p>Jogo de gestão de recursos na Sicília do Século VIII. Recolhe recursos, funda 3 cidades e pontua o máximo possível. Quando um jogador funda a 3ª cidade, os restantes jogam mais 1 turno.</p>
+      <h3>Recursos</h3>
+      <p>5 tipos: 🌾 Cereais · 🍇 Vinho · 🐟 Peixe · 🧱 Calcário · 🌿 Azeite. Cada tipo tem uma pilha com um disco numérico (valor) que sobe e desce ao longo do jogo.</p>
+      <h3>Torre de Discos</h3>
+      <p>18 discos ordenados (menor em baixo): pretos (12,11,11,10,10,8,8,6,6,4,4,2,2) e vermelhos 🔴 (9,7,5,3,1). Quando um disco vermelho é colocado numa pilha, os <strong>Fogo do Etna</strong> move-se!</p>
+      <h3>Turno</h3>
+      <p>Em cada turno o jogador <em>deve</em> fazer pelo menos 1 recolha. Pode depois fazer uma 2ª recolha e/ou fundar uma cidade, terminando o turno quando quiser.</p>
+      <h3>Recolher Recursos</h3>
+      <ul>
+        <li><strong>1 carta</strong> — coloca token num hex livre. O valor do disco mantém-se.</li>
+        <li><strong>2 cartas</strong> — coloca token e retira o disco do topo da torre para a pilha desse recurso (valor desce). Se o disco for vermelho 🔴, os Fogo do Etna move-se para um hex adjacente.</li>
+      </ul>
+      <div class="rule-box">Não podes colocar token em hex com Fogo do Etna ou com token de outro jogador.</div>
+      <h3>Fundar Cidade</h3>
+      <p>Precisas de <strong>5 cartas</strong> na mão com exactamente <strong>2 tipos</strong> de recursos. O tipo escolhido em primeiro é a <strong>maioria</strong> — fica na cidade e conta para pontos. O segundo é a <strong>minoria</strong> — é descartado e melhora o valor da torre.</p>
+      <ul>
+        <li><strong>Maioria</strong> (tipo escolhido primeiro) — cartas ficam na cidade e contam para a pontuação final</li>
+        <li><strong>Minoria</strong> (tipo escolhido segundo) — cartas são descartadas e o disco do topo volta à torre (valor sobe)</li>
+        <li>Em caso de empate (ex: 3 vinhos e 3 peixes), o tipo escolhido primeiro é tratado como maioria</li>
+      </ul>
+      <h3>Pontuação Final</h3>
+      <div class="rule-box"><strong>Pontos</strong> = soma das cidades: cartas da maioria × valor actual do disco desse recurso no fim do jogo</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="movl" id="movl">
+  <div class="mbox">
+    <h3 id="mtitle"></h3>
+    <p id="mbody"></p>
+    <div id="mres-opts" class="mres-opts" style="display:none"></div>
+    <div class="mbtns" id="mbtns"></div>
+  </div>
+</div>
+
+<!-- NAME -->
+<div id="s-name" class="screen active">
+  <div class="name-box">
+    <h1>CATANIA</h1>
+    <p class="sub">Um jogo de David Marques &bull; Fundação da Magna Grécia</p>
+    <p class="era">Século VIII a.C.</p>
+    <div class="name-wrap">
+      <label>O teu nome, Cidadão</label>
+      <input id="pin" type="text" maxlength="16" placeholder="Nome..." autocomplete="off">
+      <button class="btn" id="btn-enter">Entrar em Catânia →</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="s-lobby" class="screen" style="justify-content:flex-start;overflow-y:auto">
+  <div class="lobby-content" style="width:100%;max-width:900px;padding:1.5rem">
+    <div class="lobby-hdr">
+      <h2>CATANIA</h2>
+      <p>Bem-vindo, <span id="lpn" style="color:var(--gold)"></span></p>
+    </div>
+    <div class="tables-grid" id="tgrid"></div>
+    <div style="text-align:center;margin-top:1.25rem">
+      <button class="btn sec lobby-rules-btn" onclick="openRules()">📖 Como jogar</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAITING -->
+<div id="s-wait" class="screen">
+  <div class="wbox">
+    <h2 id="wtitle">Mesa</h2>
+    <p class="whint pulse" id="whint">À espera de jogadores...</p>
+    <div class="wseats" id="wseats"></div>
+    <div class="wacts">
+      <button class="btn" id="wstart" style="display:none">▶ Iniciar Jogo</button>
+      <button class="btn sec" onclick="leaveLobby()">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="s-game" class="screen">
+  <!-- Left: top bar + player bar + board + hand -->
+  <div class="game-left">
+    <div class="gtop">
+      <h3>⚑ CATANIA</h3>
+      <div class="sp"></div>
+      <div class="tind" id="tind">—</div>
+      <button class="btn sec" style="font-size:var(--fs-sm);padding:.3rem 1rem" onclick="openRules()">📖</button>
+      <button class="btn sec" style="font-size:var(--fs-sm);padding:.3rem 1rem" onclick="confirmLeave()">← Sair</button>
+    </div>
+    <div class="player-bar" id="pbar"></div>
+    <div class="opp-hands" id="opp-hands"></div>
+    <div class="gboard"><div id="bwrap"></div></div>
+    <div class="hand-footer">
+      <div class="villages-area" id="villages-area" style="display:none">
+        <div class="villages-lbl">Cidades</div>
+        <div class="village-cards" id="village-cards"></div>
+      </div>
+      <div class="hand-divider" id="hand-divider" style="display:none"></div>
+      <div class="hand-lbl">Mão<br><span id="hlbl" style="color:var(--parch-d);font-size:var(--fs-sm);font-family:'Spectral',serif;text-transform:none;letter-spacing:0;font-weight:400"></span></div>
+      <div class="hcards" id="hcards"></div>
+    </div>
+  </div>
+  <!-- Right: full-height sidebar -->
+  <div class="gside">
+    <div class="ssec">
+      <h4>Pilhas de Recursos</h4>
+      <div class="rpiles" id="rpiles"></div>
+    </div>
+    <div class="ssec">
+      <h4>Torre de Discos</h4>
+      <div id="tdisplay"></div>
+    </div>
+    <div class="ssec" style="flex:1;overflow:hidden">
+      <h4>Registo</h4>
+      <div class="log-box" id="log-box"></div>
+    </div>
+    <div class="apanel">
+      <h4>Ações</h4>
+      <div class="abtns" id="abtns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- VICTORY -->
+<div id="s-victory" class="screen">
+  <div class="vbox">
+    <h2>🏛 Vitória!</h2>
+    <p class="vw" id="vwinner"></p>
+    <table class="stbl">
+      <thead><tr><th>#</th><th>Jogador</th><th>Cidades</th><th>Pontos</th></tr></thead>
+      <tbody id="stbody"></tbody>
+    </table>
+    <div class="vacts">
+      <button class="btn" id="btn-again">↺ Jogar de Novo</button>
+      <button class="btn sec" onclick="backToLobby()">← Escolher Mesa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CATANIA CLIENT
+// ═══════════════════════════════════════════════════
+const SVG_URI={
+  cereais:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPGVsbGlwc2UgY3g9IjM1LjgwOTYiIGN5PSIxMC4xNjE2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiBmaWxsPSIjZjRhYTQxIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMTkuMjA2NyIgcng9IjMuNDgxNCIgcnk9IjUuMTYxNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTQuNDE3NSAyNy43NDg4KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjI3LjM0NzQiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMC4xNzM3IDMwLjEzMzEpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMzUuNDg4IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTUuOTMgMzIuNTE3NCkgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSIzMS4yODciIGN5PSI0My42Mjg2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjEuNjg2MyAzNC45MDE4KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjUxLjc2OTIiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNy40NDI2IDM3LjI4NjEpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMTkuMjA2NyIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEuNjU2NyAzNC40MTQpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMjcuMzQ3NCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTcuNDEyOSAzNi43OTgzKSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjM1LjQ4OCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEzLjE2OTIgMzkuMTgyNikgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSI0MC43MTMiIGN5PSI0My42Mjg2IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTguOTI1NSA0MS41NjY5KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjUxLjc2OTIiIHJ4PSI1LjE2MTYiIHJ5PSIzLjQ4MTQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNC42ODE4IDQzLjk1MTMpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJNMzUuNzksNTZ2OSIvPgogICAgPGVsbGlwc2UgY3g9IjM1LjgwOTYiIGN5PSIxMC4xNjE2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiBmaWxsPSIjZjRhYTQxIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMTkuMjA2NyIgcng9IjMuNDgxNCIgcnk9IjUuMTYxNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTQuNDE3NSAyNy43NDg4KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjI3LjM0NzQiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMC4xNzM3IDMwLjEzMzEpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMzUuNDg4IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTUuOTMgMzIuNTE3NCkgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSIzMS4yODciIGN5PSI0My42Mjg2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjEuNjg2MyAzNC45MDE4KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjUxLjc2OTIiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNy40NDI2IDM3LjI4NjEpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMTkuMjA2NyIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEuNjU2NyAzNC40MTQpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMjcuMzQ3NCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTcuNDEyOSAzNi43OTgzKSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjM1LjQ4OCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEzLjE2OTIgMzkuMTgyNikgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSI0MC43MTMiIGN5PSI0My42Mjg2IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTguOTI1NSA0MS41NjY5KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjUxLjc2OTIiIHJ4PSI1LjE2MTYiIHJ5PSIzLjQ4MTQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNC42ODE4IDQzLjk1MTMpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzUuODA5NiIgY3k9IjEwLjE2MTYiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSIzMS4yODciIGN5PSIxOS4yMDY3IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtNC40MTc1IDI3Ljc0ODgpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMjcuMzQ3NCIgcng9IjMuNDgxNCIgcnk9IjUuMTYxNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEwLjE3MzcgMzAuMTMzMSkgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSIzMS4yODciIGN5PSIzNS40ODgiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xNS45MyAzMi41MTc0KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjQzLjYyODYiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMS42ODYzIDM0LjkwMTgpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iNTEuNzY5MiIgcng9IjMuNDgxNCIgcnk9IjUuMTYxNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTI3LjQ0MjYgMzcuMjg2MSkgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSI0MC43MTMiIGN5PSIxOS4yMDY3IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMS42NTY3IDM0LjQxNCkgcm90YXRlKC00NSkiIGZpbGw9IiNmMWIzMWMiLz4KICAgIDxlbGxpcHNlIGN4PSI0MC43MTMiIGN5PSIyNy4zNDc0IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtNy40MTI5IDM2Ljc5ODMpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMzUuNDg4IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTMuMTY5MiAzOS4xODI2KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2YxYjMxYyIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjQzLjYyODYiIHJ4PSI1LjE2MTYiIHJ5PSIzLjQ4MTQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xOC45MjU1IDQxLjU2NjkpIHJvdGF0ZSgtNDUpIiBmaWxsPSIjZjFiMzFjIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iNTEuNzY5MiIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTI0LjY4MTggNDMuOTUxMykgcm90YXRlKC00NSkiIGZpbGw9IiNmNGFhNDEiLz4KICA8L2c+CiAgPGcgaWQ9ImxpbmUiPgogICAgPGVsbGlwc2UgY3g9IjM1LjgwOTYiIGN5PSIxMC4xNjE2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMTkuMjA2NyIgcng9IjMuNDgxNCIgcnk9IjUuMTYxNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTQuNDE3NSAyNy43NDg4KSByb3RhdGUoLTQ1KSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjI3LjM0NzQiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xMC4xNzM3IDMwLjEzMzEpIHJvdGF0ZSgtNDUpIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8ZWxsaXBzZSBjeD0iMzEuMjg3IiBjeT0iMzUuNDg4IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTUuOTMgMzIuNTE3NCkgcm90YXRlKC00NSkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiLz4KICAgIDxlbGxpcHNlIGN4PSIzMS4yODciIGN5PSI0My42Mjg2IiByeD0iMy40ODE0IiByeT0iNS4xNjE2IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjEuNjg2MyAzNC45MDE4KSByb3RhdGUoLTQ1KSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPGVsbGlwc2UgY3g9IjMxLjI4NyIgY3k9IjUxLjc2OTIiIHJ4PSIzLjQ4MTQiIHJ5PSI1LjE2MTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNy40NDI2IDM3LjI4NjEpIHJvdGF0ZSgtNDUpIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMTkuMjA2NyIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEuNjU2NyAzNC40MTQpIHJvdGF0ZSgtNDUpIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8ZWxsaXBzZSBjeD0iNDAuNzEzIiBjeT0iMjcuMzQ3NCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTcuNDEyOSAzNi43OTgzKSByb3RhdGUoLTQ1KSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjM1LjQ4OCIgcng9IjUuMTYxNiIgcnk9IjMuNDgxNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEzLjE2OTIgMzkuMTgyNikgcm90YXRlKC00NSkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiLz4KICAgIDxlbGxpcHNlIGN4PSI0MC43MTMiIGN5PSI0My42Mjg2IiByeD0iNS4xNjE2IiByeT0iMy40ODE0IiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTguOTI1NSA0MS41NjY5KSByb3RhdGUoLTQ1KSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPGVsbGlwc2UgY3g9IjQwLjcxMyIgY3k9IjUxLjc2OTIiIHJ4PSI1LjE2MTYiIHJ5PSIzLjQ4MTQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yNC42ODE4IDQzLjk1MTMpIHJvdGF0ZSgtNDUpIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPC9nPgo8L3N2Zz4=',
+  vinho:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxnIGlkPSJjb2xvciI+CiAgICA8cGF0aCBmaWxsPSIjYjM5OWM4IiBkPSJtMzIuMzMgMzcuNTRhNi42ODggNi42ODggMCAwIDEtNi42ODggNi42ODggNi42ODggNi42ODggMCAwIDEtNi42ODgtNi42ODggNi42ODggNi42ODggMCAwIDEgNi42ODgtNi42ODggNi42ODggNi42ODggMCAwIDEgNi42ODggNi42ODgiLz4KICAgIDxwYXRoIGZpbGw9IiNiMzk5YzgiIGQ9Im0yNy44OCAyNy41MWE2LjY4OCA2LjY4OCAwIDAgMS02LjY4OCA2LjY4OCA2LjY4OCA2LjY4OCAwIDAgMS02LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OCA2LjY4OCIvPgogICAgPHBhdGggZmlsbD0iI2IzOTljOCIgZD0ibTMxLjIyIDM0LjJhNi42ODQgNi42ODQgMCAxIDAtNS44OTctMy41MzEiLz4KICAgIDxwYXRoIGZpbGw9IiNiMzk5YzgiIGQ9Im00OS4wNSA0Ny41OGE2LjY4OCA2LjY4OCAwIDAgMS02LjY4OCA2LjY4OCA2LjY4OCA2LjY4OCAwIDAgMS02LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OCA2LjY4OCIvPgogICAgPHBhdGggZmlsbD0iI2IzOTljOCIgZD0ibTM3LjkxIDQ3LjU4YTYuNjg4IDYuNjg4IDAgMCAxLTYuNjg4IDYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxLTYuNjg4LTYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxIDYuNjg4LTYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxIDYuNjg4IDYuNjg4Ii8+CiAgICA8cGF0aCBmaWxsPSIjYjM5OWM4IiBkPSJtNTUuNzQgMzcuNTRhNi42ODggNi42ODggMCAwIDEtNi42ODggNi42ODggNi42ODggNi42ODggMCAwIDEtNi42ODgtNi42ODggNi42ODggNi42ODggMCAwIDEgNi42ODgtNi42ODggNi42ODggNi42ODggMCAwIDEgNi42ODggNi42ODgiLz4KICAgIDxwYXRoIGZpbGw9IiNiMzk5YzgiIGQ9Im00My40OCAzNi40M2E2LjY4OCA2LjY4OCAwIDAgMS02LjY4OCA2LjY4OCA2LjY4OCA2LjY4OCAwIDAgMS02LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OC02LjY4OCA2LjY4OCA2LjY4OCAwIDAgMSA2LjY4OCA2LjY4OCIvPgogICAgPHBhdGggZmlsbD0iIzg5NjdhYSIgZD0ibTM2LjU3IDI5LjEzYTYuNjg4IDYuNjg4IDAgMCAxIDAgMTMuMzgiLz4KICAgIDxwYXRoIGZpbGw9IiM4OTY3YWEiIGQ9Im01Ny44MiAyNy4xOGMwIDMuNjkzLTEuMjM5IDUuNDg2LTQuNzYyIDQuMzc3LTQuNzEzLTEuNDgzLTguODY5IDAuMDkxMi04LjYxMy00LjM3NyAwLjIxMTctMy42ODcgMi45OTQtNi42ODggNi42ODgtNi42ODhzNi42ODggMi45OTQgNi42ODggNi42ODgiLz4KICAgIDxwYXRoIGZpbGw9IiNiMzk5YzgiIGQ9Im00Ny4yMiAzMC41NGE2LjY3OCA2LjY3OCAwIDEgMC00LjE2NSAzLjQxNSIvPgogICAgPHBhdGggZmlsbD0iI2IzOTljOCIgZD0ibTQzLjQ4IDU3LjYxYTYuNjg4IDYuNjg4IDAgMCAxLTYuNjg4IDYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxLTYuNjg4LTYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxIDYuNjg4LTYuNjg4IDYuNjg4IDYuNjg4IDAgMCAxIDYuNjg4IDYuNjg4Ii8+CiAgICA8cGF0aCBmaWxsPSIjODk2N2FhIiBkPSJtMzYuNTcgNTAuOTJhNi42ODggNi42ODggMCAwIDEgMCAxMy4zOCIvPgogICAgPHBhdGggZmlsbD0iIzg5NjdhYSIgZD0ibTQyLjE2IDQwLjg5YTYuNjg4IDYuNjg4IDAgMCAxIDAgMTMuMzgiLz4KICAgIDxwYXRoIGZpbGw9IiM4OTY3YWEiIGQ9Im00OC45NyAzMC43OWE2LjY4OCA2LjY4OCAwIDAgMSAwIDEzLjM4Ii8+CiAgICA8cGF0aCBmaWxsPSIjODk2N2FhIiBkPSJtNDEuMDggMjAuODhhNi42ODggNi42ODggMCAwIDEgMCAxMy4zOCIvPgogIDwvZz4KICA8ZyBpZD0ibGluZSI+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtMzcuMDEgMjEuODJjLTEuMzQzLTcuMzMxLTYuMjI5LTIyLjQzLTIyLjg1LTcuNTc0Ii8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgZD0ibTU0LjM0IDMyLjlhNi42NzkgNi42NzIgMCAxIDAtOC4xMTItMTAuMzIiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIGQ9Im0zMC40OCA0MC40MmE2LjYyNSA2LjYxOSAwIDAgMS0wLjk0OS0zLjQxOCA2LjcwNiA2LjY5OSAwIDAgMSA1LjQ2Mi02LjU2MiIvPgogICAgPGVsbGlwc2UgY3g9IjM2LjU3IiBjeT0iNTcuMzQiIHJ4PSI2LjcyMSIgcnk9IjYuNzE1IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtMzYuNTcgNTAuNjJhNi43MjEgNi43MTUgMCAwIDAgMCAxMy40MyIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTQyLjE3IDUzLjk4cTAuMjU1MiAwIDAuNTA1OS0wLjAxODY5Ii8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtNDIuNjcgNTMuOTZhNi43MTggNi43MTEgMCAxIDAtNi41NTEtMy43NTYiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIGQ9Im0zNi4zNyA0My4yOGE2LjcyMSA2LjcxNSAwIDEgMC02LjA0MiAxMC42NyIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTQzLjEzIDMzLjczYTYuNzMyIDYuNzI1IDAgMCAwLTAuMjgwMSA2LjQxNiIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTQ3LjkxIDQzLjg0YTYuNzIxIDYuNzE1IDAgMSAwLTQuNzgzLTEwLjExIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtMzAuNDEgMzIuNzVhNi43MjEgNi43MTUgMCAxIDAtNi4xNTcgMTEuMDYiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIGQ9Im0yNC4yNSA0My44MWE2Ljc3NSA2Ljc2OCAwIDAgMCAxLjExMiAwLjA5MTQzIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtNTQuNSAzMi45M2E2LjcyMSA2LjcxNSAwIDEgMC04LjMyMi0xMC4zNSIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTQ2LjY4IDMwLjc4YTYuNzA4IDYuNzAxIDAgMSAwLTMuNjY5IDIuNzY1Ii8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtMzUuODMgMjIuNDhhNi43MjMgNi43MTYgMCAwIDAtMTAuOSA3LjU4MiIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTI1LjY0IDIyLjM3YTYuNzIxIDYuNzE1IDAgMSAwLTYuMjE2IDExLjMiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIGQ9Im01MC41NyA5LjIxMnMtMy4zNTcgNy42MzUtMTUuNjggNS40OTYiLz4KICA8L2c+Cjwvc3ZnPg==',
+  peixe:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPHBhdGggZmlsbD0iIzkyZDNmNSIgZD0ibTE2LjExMDEsMzUuMjExMnMtNS4xMTAxLTQuODA3NC00LjA2NTktMTEuMDcyNiwxMy41NzQ2LDEuMDQ0MiwxNC42MTg4LDYuMjY1MmMwLDAsMy4xMzI2LTUuMjIxLDguMzUzNi02LjI2NTIsMCwwLTEuMDQ0Mi01LjIyMSwwLTguMzUzNiwwLDAsMTEuNDg2Mi00LjE3NjgsMTUuNjYzLDYuMjY1MiwwLDAsMTEuNDg2MiwyLjA4ODQsMTIuNTMwNCwxMS40ODYybC0zLjEzMjYsMi4wODg0LDIuNzQxLDIuMzQ5NXMtLjEyNiw2Ljk4MTMtMTEuODc1NSwxMC4xNDc0YzAsMC0yLjM1MTcsNy4zNDI5LTEwLjcwNTMsNS4yNTQ1bDEuMDQ0Mi01LjIyMXMtNi4yNjUyLDEuMDQ0Mi0xNC42MTg4LTguMzUzNmMwLDAtMy4xMzI2LDkuMzk3OC0xNS42NjMsNy4zMDk0LDAsMC0uMjIxOC04LjEzNjYsNS4xMTAxLTExLjg5OThaIi8+CiAgICA8cGF0aCBmaWxsPSIjNjFiMmU0IiBkPSJtNDEuNzgwNSwyOC42Njgycy03Ljg2NjQsNC4zNDM1LS44NjUyLDExLjA0NzYiLz4KICA8L2c+CiAgPGcgaWQ9ImxpbmUiPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgZD0ibTE2LjExMDEsMzUuMjExMnMtNS4xMTAxLTQuODA3NC00LjA2NTktMTEuMDcyNiwxMy41NzQ2LDEuMDQ0MiwxNC42MTg4LDYuMjY1MmMwLDAsMy4xMzI2LTUuMjIxLDguMzUzNi02LjI2NTIsMCwwLTEuMDQ0Mi01LjIyMSwwLTguMzUzNiwwLDAsMTEuNDg2Mi00LjE3NjgsMTUuNjYzLDYuMjY1MiwwLDAsMTEuNDg2MiwyLjA4ODQsMTIuNTMwNCwxMS40ODYybC0zLjEzMjYsMi4wODg0LDIuNzQxLDIuMzQ5NXMtLjEyNiw2Ljk4MTMtMTEuODc1NSwxMC4xNDc0YzAsMC0yLjM1MTcsNy4zNDI5LTEwLjcwNTMsNS4yNTQ1bDEuMDQ0Mi01LjIyMXMtNi4yNjUyLDEuMDQ0Mi0xNC42MTg4LTguMzUzNmMwLDAtMy4xMzI2LDkuMzk3OC0xNS42NjMsNy4zMDk0LDAsMC0uMjIxOC04LjEzNjYsNS4xMTAxLTExLjg5OThaIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJtNDEsMjguNzVzLTYsNC0xLDExIi8+CiAgPC9nPgo8L3N2Zz4=',
+  calcario:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPHBhdGggZmlsbD0iI2QwY2ZjZSIgZD0iTTU1Ljc4NSwzNC45OWEuOTk5Mi45OTkyLDAsMCwxLC4xMDU1LDEuMDQxbC0zLjg5NDYsOC4wNjI2YTEuMDAyMSwxLjAwMjEsMCwwLDEtLjcwNi41NDY4TDQwLjQ5Miw0Ni43NzgzYTEuMDA3LDEuMDA3LDAsMCwxLS43OTM5LS4xODA2TDE2LjIxMzcsMjkuMDJhMS4wMDA3LDEuMDAwNywwLDAsMS0uMTc1OC0xLjQzMTZsMi40Mzg1LTIuOTk3MWEuOTk4MS45OTgxLDAsMCwxLC4zMjUyLS4yNjI3bDE4LjMwNTctOS4yMjE3YTEuMDE0NywxLjAxNDcsMCwwLDEsLjY1NzItLjA4NDlsMy44MTkzLjgwNjZhLjk5NzQuOTk3NCwwLDAsMSwuNjM2Ny40NDI0bDIuNjczMSw0LjE0NCwxLjYyMTMsMi40OTA1WiIvPgogICAgPHBvbHlnb24gZmlsbD0iIzNmM2YzZiIgcG9pbnRzPSIyNi42OTIgNTYgNDYuNzg4IDU2IDQwLjMxNyA0NS44MTkgMTYuOTQzIDI4LjIxOSAxNS44MTQgMzMuMDQ2IDI2LjY5MiA1NiIvPgogICAgPHBvbHlnb24gZmlsbD0iIzliOWI5YSIgcG9pbnRzPSI1NC43OCAzNi4wMzEgNTYuMTI4IDQ3LjU0NCA1NC40NjkgNTYgNDYuNzg4IDU2IDQwLjMxNyA0NS44MTkgNTAuOTM5IDQzLjk0IDU0Ljc4IDM2LjAzMSIvPgogIDwvZz4KICA8ZyBpZD0ibGluZSI+CiAgICA8cG9seWxpbmUgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgcG9pbnRzPSI0NS43OTcgMjMuNjA4IDU0Ljk5IDM1LjU5NyA1Ni4xMjggNDcuMjM5IDU0LjQ2OSA1NiAyNi42OTIgNTYgMTYgMzIuODYgMTYuODEzIDI4LjIxOSAxOS4yNTIgMjUuMjIyIDM3LjU1OCAxNiA0MS4zNzcgMTYuODA3IDQ0LjAyIDIwLjkxNyAzOS4wMDggMjQuMjciLz4KICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBwb2ludHM9IjQ3LjM1OSA1NiA0MC4yOTggNDUuNzk3IDE2LjgxMyAyOC4yMTkiLz4KICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBwb2ludHM9IjU0Ljk5IDM1LjU5NyA1MS4wOTUgNDMuNjU5IDQwLjI5OCA0NS43OTciLz4KICA8L2c+Cjwvc3ZnPg==',
+  azeite:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPGVsbGlwc2UgY3g9IjM1Ljk3NjUiIGN5PSIzNi4xNDUiIHJ4PSIyMy4wNDQ2IiByeT0iMTYuNjEyIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTUuMDIxMSAzNi4wMjU4KSByb3RhdGUoLTQ1KSIgZmlsbD0iI2IxY2MzMyIvPgogICAgPHBhdGggZmlsbD0iIzVjOWUzMSIgZD0iTTU2LjEzLDI5LjM3NDJhMjguNTcsMjguNTcsMCwwLDEtNy40MjQ1LDEyLjM3MTljLTguOTk5NSw5LTIxLjY4MjUsMTAuOTA3NS0yOC4zMjgzLDQuMjYxN2ExMy43MDgzLDEzLjcwODMsMCwwLDEtMy44Mjk0LTguMTM3MVMxMi42ODE5LDU3Ljg5ODUsMzAuOTk5LDU2YzAsMCwxOC4wMDkxLS4yODgsMjQuNzQ1OC0yMi43M1oiLz4KICAgIDxwYXRoIGZpbGw9IiNhNTc5MzkiIGQ9Ik00Ny45NzM2LDMxLjc3YTguMzk3Miw4LjM5NzIsMCwwLDEtNS42NzI4LTIuNjg1NWMtMi44NDc3LTIuODQ3Ny0zLjUzMzItNi42MjIxLTEuNTYwNi04LjU5NDhhNC4zODg0LDQuMzg4NCwwLDAsMSw0LjE4NjUtLjk3NzUsOS4xNzIxLDkuMTcyMSwwLDAsMSw0LjQwOTIsMi41MzcxaDBjMi44NDc3LDIuODQ3NywzLjUzMzIsNi42MjMxLDEuNTYwNiw4LjU5NTdBNC4wMyw0LjAzLDAsMCwxLDQ3Ljk3MzYsMzEuNzdaIi8+CiAgPC9nPgogIDxnIGlkPSJsaW5lIj4KICAgIDxlbGxpcHNlIGN4PSIzNS45NzY1IiBjeT0iMzYuMTQ1IiByeD0iMjMuMDQ0NiIgcnk9IjE2LjYxMiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTE1LjAyMTEgMzYuMDI1OCkgcm90YXRlKC00NSkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTUwLjI1NTksMjkuOTM4MmMtMS41NTIxLDEuNTUyMS00Ljc2NzMuODUzNS03LjE4MTMtMS41NnMtMy4xMTI3LTUuNjI5Mi0xLjU2LTcuMTgxNCw0Ljc2NzMtLjg1MzUsNy4xODEzLDEuNTZhOC4yMjM5LDguMjIzOSwwLDAsMSwyLjI1MzQsMy44NSIvPgogIDwvZz4KPC9zdmc+',
+  vulcao:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxnIGlkPSJjb2xvciI+CiAgICA8cGF0aCBmaWxsPSIjRDBDRkNFIiBzdHJva2U9IiNEMENGQ0UiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjEuOCIgZD0iTTI4LjgsOS4xYy0wLjQtMC43LDEuNi00LjIsNC42LTQuNGMzLTAuMyw1LjIsMS41LDQuNCwzLjZzLTIuMSwyLjItMi44LDIuM2wzLjIsMS43Yy0wLjgsMi4xLTcuOCwyLjctNi41LDUuNmwtNCwwLjQgYzAuMS0xLjUsMC0zLjctMS41LTQuOWMtMS4xLTAuOS0yLjgtMS4xLTQuMi0xLjZjLTItMC43LTItMi43LTEuNC00QzIxLjMsNi40LDIyLjQsNSwyNCw1YzEsMCwyLDAsMywxTDI4LjgsOS4xeiIvPgogICAgPHBvbHlnb24gZmlsbD0iIzlCOUI5QSIgcG9pbnRzPSI2Myw1NyA1Ni40LDQ5LjEgNTMsNDAgNDUsMzQgNDAsMzQgMzYsMjIgNDAsMzQgMzYsMjIgMzIsMjQgMjQuMiwyMi4xIDE5LDM0IDE3LDQ2IDksNTciLz4KICAgIDxwYXRoIGZpbGw9IiNFQTVBNDciIGQ9Ik0zMy43LDIyLjNjMS40LDAuNCwwLjgsMi4xLDEuNSw0LjRjMC40LDEuNCwwLjMsMS44LDAuMywyYy0wLjUsMS4zLTEuMiwxLjItMS43LDIuNCBjLTAuNCwxLjEsMC43LDEuNiwwLjQsM3MtMS43LDIuNy0yLjcsMi40Yy0wLjgtMC4yLTEuMS0xLjMtMS4zLTEuOGMtMC41LTEuOCwwLjItMy41LDAuNC00LjFjMC44LTEuOCwxLjctMi4yLDEuNS0zLjMgYy0wLjEtMS0xLTEuNi0xLjMtMS44Yy0wLjgtMC42LTIuMS0xLTMuMS0wLjZjLTEuOSwwLjgtMi40LDQuNi0yLDcuNGMwLjQsMi4yLDIuOCw3LDIuMiw4LjdjLTAuMiwwLjctMi0zLjEtMy4yLTEuNSBjLTEuMSwxLjQsMC40LDUuMy0xLjgsNi42Yy0xLjMsMC43LTEuNy0zLjktMS44LTMuOWMtMC4zLDAtMSwxLjUtMC4zLTIuMWMwLjQtMi40LDEuNy0xLjQsMi4xLTRjMC4yLTEuNSwwLjEtNC0wLjEtNiBjLTAuMy0zLTEuNC0yLjctMS4xLTUuMWMwLjEtMC44LDAuOC0xLjUsMi0yLjFjMC41LTAuMiwwLjItMS45LDIuNC0xLjhjMy42LDAuMiw0LjEsMS40LDUuMiwxLjNDMzIuNywyMi4zLDMzLDIyLjEsMzMuNywyMi4zeiIvPgogIDwvZz4KICA8ZyBpZD0iaGFpciIvPgogIDxnIGlkPSJza2luIi8+CiAgPGcgaWQ9InNraW4tc2hhZG93Ii8+CiAgPGcgaWQ9ImxpbmUiPgogICAgPHBvbHlsaW5lIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgcG9pbnRzPSI2Myw1NiA1Ni40LDQ5LjEgNTMsNDAiLz4KICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIHBvaW50cz0iMjQsMjIgMTksMzQgMTcsNDYgOSw1NiIvPgogICAgPHBvbHlsaW5lIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgcG9pbnRzPSI0MCwzNCAzNiwyMiAzNC40LDIyLjgiLz4KICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIHBvaW50cz0iNDAsMzQgNDUsMzQgNTMsNDAgNTIsNDYgNTMsNTEgNTEsNTMgNDgsNTYiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS44IiBkPSJNMzMuNywyMi4zYzEuNCwwLjQsMC44LDIuMSwxLjUsNC40YzAuNCwxLjQsMC4zLDEuOCwwLjMsMmMtMC41LDEuMy0xLjIsMS4yLTEuNywyLjRjLTAuNCwxLjEsMC43LDEuNiwwLjQsM3MtMS43LDIuNy0yLjcsMi40IGMtMC44LTAuMi0xLjEtMS4zLTEuMy0xLjhjLTAuNS0xLjgsMC4yLTMuNSwwLjQtNC4xYzAuOC0xLjgsMS43LTIuMiwxLjUtMy4zYy0wLjEtMS0xLTEuNi0xLjMtMS44Yy0wLjgtMC42LTIuMS0xLTMuMS0wLjYgYy0xLjksMC44LTIuNCw0LjYtMiw3LjRjMC40LDIuMiwyLjgsNywyLjIsOC43Yy0wLjIsMC43LTItMy4xLTMuMi0xLjVjLTEuMSwxLjQsMC40LDUuMy0xLjgsNi42Yy0xLjMsMC43LTEuNy0zLjktMS44LTMuOSBjLTAuMywwLTEsMS41LTAuMy0yLjFjMC40LTIuNCwxLjctMS40LDIuMS00YzAuMi0xLjUsMC4xLTQtMC4xLTZjLTAuMy0zLTEuNC0yLjctMS4xLTUuMWMwLjEtMC44LDAuOC0xLjUsMi0yLjEgYzAuNS0wLjIsMC4yLTEuOSwyLjQtMS44YzMuNiwwLjIsNC4xLDEuNCw1LjIsMS4zQzMyLjcsMjIuMywzMywyMi4xLDMzLjcsMjIuM3oiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTI0LjIsMTYuM2MtMC40LTEuNi0zLjMtMi40LTYuNS0xLjciLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTM1LDE4LjljMi43LTEuOSw2LjctMC45LDguOSwyLjMiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTIyLjgsMTkuOWMtMS41LTEuNi04LjUtNC4xLTkuOCw0LjIiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTI3LDZjLTEtMS0yLTEtMy0xYy0xLjYsMC0yLjcsMS40LTMuNCwyLjdDMjAsOSwyMCwxMSwyMiwxMS43YzEuMywwLjUsMy4xLDAuNyw0LjIsMS42YzEuNSwxLjIsMS41LDMuNCwxLjUsNC45Ii8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIGQ9Ik0zNC45LDEwLjVjMC43LTAuMSwyLTAuMiwyLjgtMi4zcy0xLjQtMy45LTQuNC0zLjZzLTUsMy44LTQuNiw0LjQiLz4KICAgIDxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTMxLjYsMTcuOWMtMS4zLTIuOSw1LjctMy41LDYuNS01LjYiLz4KICA8L2c+Cjwvc3ZnPg==',
+  fogo:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPHBhdGggZmlsbD0iI2ZjZWEyYiIgZD0iTTE1LjQ4ODMsNDIuODY4N0EzMy41ODI1LDMzLjU4MjUsMCwwLDEsMTkuMzg3NiwyNy43NzhjLjQ2NTEsNy4zMDU0LDMuOTExMywxMC4yNDY4LDUuNjIxOSwxMC4yNDY4LDEuMjc3OCwwLDIuNDUyOS0xLjMwMjIsMi40NTI5LTMuNDI1OS4wODg1LTIuNzQyMS41MDY1LTcuNDM3Miw0LjE3NDMtMTQuMjI0NmEyLjA5NjQsMi4wOTY0LDAsMCwwLDEuMDI2OS4yODY2YzEuNDM2OCwwLDMuNzUtMS41NTQ1LDEuODUxNC0xMy4yMDEyLDAsMCwxNC4xMDkyLDkuNTA5MiwxMy41Nzg1LDI1LjI1NDRhMS45MzI0LDEuOTMyNCwwLDAsMCwyLjA4LDIuMDM0NSw1LjE0LDUuMTQsMCwwLDAsMy45ODA3LTIuNjc0MkEyMC43MjA4LDIwLjcyMDgsMCwwLDEsNTYuMzE1Niw0MS43N2MwLDEyLjA1NS03LjQ4MTgsMjEuNDg2Ny0yMC4yNTYxLDIxLjQ4NjctMTEuMzc3MiwwLTIwLjU3MTItOS41ODQ4LTIwLjU3MTItMjAuMDU3NSIvPgogICAgPHBhdGggZmlsbD0iI2YxYjMxYyIgZD0iTTM3LjI1NDUsMjYuOTA3N2MtLjM4MzMsMS40NzQzLTEuNjYxLDMuOTMxNC01LjM2NjQsOC4xNTc2LS4xMjc3LjA5ODMtLjEyNzcuMTk2Ni0uMjU1NS4yOTQ5LS4zODMzLjY4OC0yLjA2NTQsMS45NTEtMi4wNjU0LDQuNzM4M2E1LjA5MTIsNS4wOTEyLDAsMCwwLC42NiwyLjI0LDQuODUsNC44NSwwLDAsMS0zLjA0MTYsMS40OTNjLS43NDYxLDAtMi4zMDg3LS43MTA5LTIuNDI5NC0xLjgyMDlhNC43MzE0LDQuNzMxNCwwLDAsMC0xLjcwMTMsMy42NzA5YzAsNC4zODc3LDIuMDYxNSw4Ljk0MjUsNy45MzksMTIuNDgwOCwwLDAsMS42NjEsMS4wODExLDEuNzg4NywxLjk2NTcsMCwwLDAsLjA5ODMuMTI3OC4wOTgzaDYuNzcxOGMuMjU1NiwwLC4yNTU2LDAsLjI1NTYtLjA5ODMsMC0uMTk2Ni41MTEtMS4yNzc3LDQuMDg4Ni0zLjczNDhhMTQuMTA2LDE0LjEwNiwwLDAsMCw0LjcyNzUtNS4yMDkxLjg2MjEuODYyMSwwLDAsMC0uNzY2Ni0xLjE3OTRBMi4wMTU1LDIuMDE1NSwwLDAsMSw0Ni43MSw0OC44MjUyaDBzLS4yNTU2LS43ODYzLjc2NjYtMi41NTU0YTQuNzE4MSw0LjcxODEsMCwwLDAsLjg0MS0yLjM1ODksMS4yMDY0LDEuMjA2NCwwLDAsMC0xLjY2MS0uNjg4LDIuODYzMiwyLjg2MzIsMCwwLDEtMy42NTItMS4wODExcy0uODk0My0xLjU3MjUtLjEyNzctNS40MDU2Yy41MTExLTIuOTQ4Ni0xLjI3NzctNy43NjQ1LTMuNTc3Ni0xMC4yMjE2QzM4LjY2LDI1LjkyNDgsMzcuMzgyMywyNi4xMjE0LDM3LjI1NDUsMjYuOTA3N1oiLz4KICAgIDxwb2x5bGluZSBmaWxsPSIjM2YzZjNmIiBwb2ludHM9IjM5LjMwMiA1NS44ODEgNDcuMDU3IDU2LjQxOSA0MS41MDEgNDcuNjAzIDQ1LjAxMyA0Ny43NTcgNDAuMjE3IDQwLjUwMSA0My4yMzcgNDAuMzMyIDM2LjM5NyAzMC45NyAyOS44MjYgNDAuNTQ3IDMyLjkwNyA0MC4xNzEgMjcuNTY2IDQ3Ljc1NyAzMS4yOTMgNDcuNjAzIDI1LjczNyA1Ni40MTkgMzIuNjcgNTUuNjA1Ii8+CiAgPC9nPgogIDxnIGlkPSJsaW5lIj4KICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBwb2ludHM9IjM5LjYzMiA1NS44ODEgNDcuMDU3IDU2LjQxOSA0MS41MDEgNDcuNjAzIDQ1LjAxMyA0Ny43NTcgNDAuMjE3IDQwLjUwMSA0My4yMzcgNDAuMzMyIDM2LjM5NyAzMC45NyAyOS44MjYgNDAuNTQ3IDMyLjkwNyA0MC4xNzEgMjcuNTY2IDQ3Ljc1NyAzMS4yOTMgNDcuNjAzIDI1LjczNyA1Ni40MTkgMzIuMzQgNTUuNjA1Ii8+CiAgICA8bGluZSB4MT0iMzYuMzk2OSIgeDI9IjM2LjM5NjkiIHkxPSI1Ny4yMjY0IiB5Mj0iNjMuMjIwMSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJNMjAuMzQ4OCw1NS44ODc3YTIwLjE5NDgsMjAuMTk0OCwwLDAsMS00Ljg2LTEzLjAxOUEzMy41ODI1LDMzLjU4MjUsMCwwLDEsMTkuMzg3NiwyNy43NzhjLjQ2NTEsNy4zMDU0LDMuOTExMywxMC4yNDY4LDUuNjIxOSwxMC4yNDY4LDEuMjc3OCwwLDIuNDUyOS0xLjMwMjIsMi40NTI5LTMuNDI1OS4wODg1LTIuNzQyMS4xNzY2LTcuMTA3MiwzLjg0NDMtMTMuODk0NiIvPgogICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTQ2Ljg3MSw2MC40MzZhMjAuNjM3OSwyMC42Mzc5LDAsMCwxLTEwLjgxMTUsMi44MiwyMC4yODgsMjAuMjg4LDAsMCwxLTEwLjMyNDMtMi44MjUzIi8+CiAgICA8cGF0aCBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBkPSJNMzQuODQ1LDcuNDZzMTMuNzc5Miw5LjUwOTIsMTMuMjQ4NSwyNS4yNTQ0YTEuOTMyNCwxLjkzMjQsMCwwLDAsMi4wOCwyLjAzNDUsNS4xNCw1LjE0LDAsMCwwLDMuOTgwNy0yLjY3NDJBMjAuNzIwOCwyMC43MjA4LDAsMCwxLDU2LjMxNTYsNDEuNzdhMjMuNDY3MywyMy40NjczLDAsMCwxLTMuNzg2MiwxMy4yOCIvPgogIDwvZz4KPC9zdmc+',
+  cidade:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPHJlY3QgeD0iMTguNTQiIHk9IjI2IiB3aWR0aD0iMzQuOTIiIGhlaWdodD0iMjUuOTUiIGZpbGw9IiM5YjliOWEiLz4KICAgIDxyZWN0IHg9IjEyIiB5PSI1NiIgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIvPgogICAgPHJlY3QgeD0iMTQuMTMiIHk9IjIyIiB3aWR0aD0iNDMuNzQiIGhlaWdodD0iNCIgZmlsbD0iI2ZmZiIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIi8+CiAgICA8cmVjdCB4PSIxNS43MiIgeT0iNTIiIHdpZHRoPSI0MC41NSIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiLz4KICAgIDxyZWN0IHg9IjE4LjUiIHk9IjI2IiB3aWR0aD0iNCIgaGVpZ2h0PSIyNiIgZmlsbD0iI2ZmZiIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIi8+CiAgICA8cmVjdCB4PSIyNy4zNSIgeT0iMjYuMTUiIHdpZHRoPSI0IiBoZWlnaHQ9IjI2IiBmaWxsPSIjZmZmIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiLz4KICAgIDxyZWN0IHg9IjQ5LjUyIiB5PSIyNS45NSIgd2lkdGg9IjMuOTQxIiBoZWlnaHQ9IjI2IiBmaWxsPSIjZmZmIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiLz4KICAgIDxwb2x5Z29uIGZpbGw9IiNmZmYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIHBvaW50cz0iMzYgMTIgMTkgMjEuNzUgNTMgMjEuNzUiLz4KICAgIDxyZWN0IHg9IjQwLjM1IiB5PSIyNi4xNSIgd2lkdGg9IjQiIGhlaWdodD0iMjYiIGZpbGw9IiNmZmYiIHN0cm9rZS1taXRlcmxpbWl0PSIxMCIvPgogIDwvZz4KICA8ZyBpZD0iaGFpciIvPgogIDxnIGlkPSJza2luIi8+CiAgPGcgaWQ9InNraW4tc2hhZG93Ii8+CiAgPGcgaWQ9ImxpbmUiPgogICAgPHJlY3QgeD0iMTEuOTkiIHk9IjU1Ljg5IiB3aWR0aD0iNDguMDEiIGhlaWdodD0iMy45OTMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIvPgogICAgPHJlY3QgeD0iMTQuMTgiIHk9IjIxLjc2IiB3aWR0aD0iNDMuNjUiIGhlaWdodD0iMy45OTkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMi4wMDEiLz4KICAgIDxyZWN0IHg9IjE1LjI3IiB5PSI1MS43NiIgd2lkdGg9IjQxLjQ3IiBoZWlnaHQ9IjMuOTkzIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiLz4KICAgIDxyZWN0IHg9IjE4LjM1IiB5PSIyNS42MSIgd2lkdGg9IjQuMjk4IiBoZWlnaHQ9IjI2LjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS43MDIiLz4KICAgIDxyZWN0IHg9IjI3LjM1IiB5PSIyNS42MSIgd2lkdGg9IjQuMjk4IiBoZWlnaHQ9IjI2LjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS43MDIiLz4KICAgIDxyZWN0IHg9IjQ5LjM1IiB5PSIyNS42MSIgd2lkdGg9IjQuMjk4IiBoZWlnaHQ9IjI2LjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS43MDIiLz4KICAgIDxwb2x5Z29uIHRyYW5zZm9ybT0ibWF0cml4KDEuMDkxIDAgMCAuOTk4MiAtMy4yODMgLjA5OCkiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS45MTYiIHBvaW50cz0iMzYgMTIgMTkgMjEuNzUgNTMgMjEuNzUiLz4KICAgIDxyZWN0IHg9IjQwLjM1IiB5PSIyNS42MSIgd2lkdGg9IjQuMjk4IiBoZWlnaHQ9IjI2LjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMS43MDIiLz4KICA8L2c+Cjwvc3ZnPg==',
+  trabalhador:'data:image/svg+xml;base64,PHN2ZyBpZD0iZW1vamkiIHZpZXdCb3g9IjAgMCA3MiA3MiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZyBpZD0iY29sb3IiPgogICAgPGcgaWQ9Il8yNjkyIj4KICAgICAgPHBhdGggZmlsbD0iI2QwY2ZjZSIgZD0iTTQ1LjQ1NzUsMTQuNjk1OSw0MC42OSwyMi4xOGw5LjYsNi4xMTYyczYuNDY3NiwxLjYzLDkuOTM4OCwyLjM1MzRsLTUuMTIyOS05LjkxMjhaIi8+CiAgICAgIDxwb2x5Z29uIGZpbGw9IiM2YTQ2MmYiIHBvaW50cz0iMjcuMTEyIDI0Ljc0MyAzNy41ODUgNDEuNDk5IDQwLjMwMiA0My41OTQgNDcuNzg3IDU1LjUxMSA0Ni44OCA1Ni4wODkgNDQuMTU5IDU3LjgyMiA0My4yNTIgNTguNCAzNS42OTEgNDYuNTMyIDM0Ljg2NCA0My4yMzMgMjQuMzkxIDI2LjQ3NiAyNy4xMTIgMjQuNzQzIi8+CiAgICAgIDxwb2x5Z29uIGZpbGw9IiNhNTc5MzkiIHBvaW50cz0iNDcuNTIyIDI2LjQ3NiAzNi45MjYgNDMuMjY4IDM2LjE3NSA0Ni42MTYgMjguNTM4IDU4LjQzNiAyNy42MzEgNTcuODU4IDI0LjkxIDU2LjEyNCAyNC4wMDMgNTUuNTQ3IDMxLjU2NCA0My42NzggMzQuMjA0IDQxLjUzNSA0NC44MDEgMjQuNzQzIDQ3LjUyMiAyNi40NzYiLz4KICAgICAgPHBhdGggZmlsbD0iIzliOWI5YSIgZD0iTTM3LjU2NTIsMTQuOTQzMmExMy40NjMxLDEzLjQ2MzEsMCwwLDAtMTEuOTYxNC4wNzQ3QTUwLjA4MjcsNTAuMDgyNywwLDAsMCwxNi4wNTE1LDIxLjIxbDEuMzMyMywyLjA5MTMtMS44NzY2LDEuMTM3My0uOTM5Mi0xLjQ3NDJhMi4zODEzLDIuMzgxMywwLDAsMC0yLjc5NywxLjc4MTlsMy44NTI3LDYuMDQ3NWEyLjgyNTMsMi44MjUzLDAsMCwwLDIuNzk3LTEuNzgxOGwtLjk4NzUtMS41NUwxOS4zLDI2LjMwOTNsMS41MTg5LDIuMzg0MkwzMC40MiwyMi41Nzc0bC0yLjc0NTEtNC4zMDg5UzM0LjEsMTQuMTc1LDM3LjU2NTIsMTQuOTQzMloiLz4KICAgIDwvZz4KICA8L2c+CiAgPGcgaWQ9ImxpbmUiPgogICAgPGcgaWQ9Il8yNjkyLTIiPgogICAgICA8cG9seWxpbmUgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgcG9pbnRzPSIzNy44OTMgNDEuNzM2IDQwLjMwMiA0My41OTQgNDcuNzg3IDU1LjUxMSA0Ni44OCA1Ni4wODkgNDQuMTU5IDU3LjgyMiA0My4yNTIgNTguNCAzNy41MDcgNDkuMzg0IDM1Ljk1OCA0Ni45NTIiLz4KICAgICAgPHBvbHlsaW5lIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHBvaW50cz0iMzMuOTM0IDQxLjc1NCAzMi4zMzUgMzkuMjE0IDI0LjM5MSAyNi40NzYgMjcuMTEyIDI0Ljc0MyAzNC4yNTggMzYuMjEyIDM1LjkwOCAzOC44MzQiLz4KICAgICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTM3LjU2NTIsMTQuOTQzMmExMy40NjMxLDEzLjQ2MzEsMCwwLDAtMTEuOTYxNC4wNzQ3QTUwLjA4MjcsNTAuMDgyNywwLDAsMCwxNi4wNTE1LDIxLjIxbDEuMzMyMywyLjA5MTMtMS44NzY2LDEuMTM3My0uOTM5Mi0xLjQ3NDJhMi4zODEzLDIuMzgxMywwLDAsMC0yLjc5NywxLjc4MTlsMy44NTI3LDYuMDQ3NWEyLjgyNTMsMi44MjUzLDAsMCwwLDIuNzk3LTEuNzgxOGwtLjk4NzUtMS41NUwxOS4zLDI2LjMwOTNsMS41MTg5LDIuMzg0MkwzMC40MiwyMi41Nzc0bC0yLjc0NTEtNC4zMDg5UzM0LjEsMTQuMTc1LDM3LjU2NTIsMTQuOTQzMloiLz4KICAgICAgPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTQ1LjQ1NzUsMTQuNjk1OSw0MC42OSwyMi4xOGw5LjYsNi4xMTYyczYuNDY3NiwxLjYzLDkuOTM4OCwyLjM1MzRsLTUuMTIyOS05LjkxMjhaIi8+CiAgICAgIDxwb2x5bGluZSBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiBwb2ludHM9IjM1LjkwOCAzOC44MzQgNDQuODAxIDI0Ljc0MyA0Ny41MjIgMjYuNDc2IDM2LjkyNiA0My4yNjggMzYuMTc1IDQ2LjYxNiAyOC41MzggNTguNDM2IDI3LjYzMSA1Ny44NTggMjQuOTEgNTYuMTI0IDI0LjAwMyA1NS41NDcgMzEuNTY0IDQzLjY3OCAzNC4yMDQgNDEuNTM1IDM1LjkwOCAzOC44MzQiLz4KICAgIDwvZz4KICA8L2c+Cjwvc3ZnPg==',
+};
+const RES=['cereais','vinho','peixe','calcario','azeite'];
+const ICON={
+  cereais: `<img src="${SVG_URI.cereais}"  width="24" height="24" style="vertical-align:middle">`,
+  vinho:   `<img src="${SVG_URI.vinho}"    width="24" height="24" style="vertical-align:middle">`,
+  peixe:   `<img src="${SVG_URI.peixe}"    width="24" height="24" style="vertical-align:middle">`,
+  calcario:`<img src="${SVG_URI.calcario}" width="24" height="24" style="vertical-align:middle">`,
+  azeite:  `<img src="${SVG_URI.azeite}"   width="24" height="24" style="vertical-align:middle">`,
+};
+const RNAME={cereais:'Cereais',vinho:'Vinho',peixe:'Peixe',calcario:'Calcário',azeite:'Azeite'};
+const RFILL={cereais:'#c8a020',vinho:'#7a2060',peixe:'#1a6080',calcario:'#7a7060',azeite:'#607a10'};
+const PCOL=['#b03a2e','#1a5276','#1d6a27','#7d6608'];
+const RED_SET=new Set([9,7,5,3,1]);
+
+// Hex geometry (pointy-top)
+const R=62, W3=Math.sqrt(3)*R;
+function hexPts(cx,cy,r){
+  const a=[];for(let i=0;i<6;i++){const ang=Math.PI/180*(60*i-30);a.push((cx+r*Math.cos(ang)).toFixed(1)+','+(cy+r*Math.sin(ang)).toFixed(1));}return a.join(' ');
+}
+function h2p(col,row){return{x:W3*col+(row&1?W3/2:0),y:R*1.5*row};}
+
+// ── State ─────────────────────────────────────────
+let ws,myName='',myToken='',myLobbyId='',mySeat=0,mySolo=false;
+let G=null,mode=null,selCards=[];
+
+// ── WS ────────────────────────────────────────────
+function connect(){
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(`${proto}//${location.host}`);
+  ws.onopen=()=>{myToken?send({type:'RECONNECT',token:myToken}):send({type:'LOBBIES'});};
+  ws.onmessage=e=>{try{dispatch(JSON.parse(e.data));}catch(err){console.error(err);}};
+  ws.onclose=()=>{toast('A reconectar…');setTimeout(connect,2500);};
+  ws.onerror=()=>ws.close();
+}
+function send(obj){if(ws?.readyState===1)ws.send(JSON.stringify(obj));}
+setInterval(()=>send({type:'PING'}),18000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(!ws||ws.readyState>1))connect();});
+
+function dispatch(msg){
+  switch(msg.type){
+    case 'PONG':break;
+    case 'LOBBIES':renderLobby(msg.lobbies);break;
+    case 'JOINED':
+      mySeat=msg.seat;myToken=msg.token;myLobbyId=msg.lobbyId;mySolo=msg.solo;
+      sessionStorage.setItem('cat_tok',myToken);
+      if(!msg.solo&&msg.lobby)renderWaiting(msg.lobby,msg.names,msg.seat);
+      else if(msg.solo)send({type:'REQUEST_STATE'});
+      break;
+    case 'RECONNECTED':mySeat=msg.seat;mySolo=msg.solo;toast('Reconectado!');send({type:'REQUEST_STATE'});break;
+    case 'RECONNECT_FAIL':sessionStorage.removeItem('cat_tok');myToken='';SS('name');break;
+    case 'LOBBY_STATE':renderWaiting(msg.lobby,msg.names,msg.mySeat);break;
+    case 'PLAYER_JOINED':send({type:'REQUEST_STATE'});break;
+    case 'GAME_STATE':renderGame(msg.state);break;
+    case 'GAME_ABORTED':toast(msg.reason||'Jogo cancelado.',4000);G=null;backToLobby();break;
+    case 'ERROR':toast('⚠ '+msg.text,3500);break;
+  }
+}
+
+// ── Utils ─────────────────────────────────────────
+function SS(id){['name','lobby','wait','game','victory'].forEach(s=>el('s-'+s).classList.toggle('active',s===id));}
+function el(id){return document.getElementById(id);}
+let _tt=null;
+function toast(msg,ms=3000){const t=el('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),ms);}
+function openRules(){el('rules-ovl').classList.add('on');}
+function closeRules(){el('rules-ovl').classList.remove('on');}
+el('rules-ovl').onclick=e=>{if(e.target===el('rules-ovl'))closeRules();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeRules();closeModal();}});
+
+// ── Name ──────────────────────────────────────────
+el('btn-enter').onclick=enterLobby;
+el('pin').onkeydown=e=>{if(e.key==='Enter')enterLobby();};
+function enterLobby(){
+  const v=el('pin').value.trim();if(!v){el('pin').focus();return;}
+  myName=v;el('lpn').textContent=myName;SS('lobby');
+  if(!ws||ws.readyState>1)connect();else send({type:'LOBBIES'});
+}
+
+// ── Lobby ─────────────────────────────────────────
+function renderLobby(lobbies){
+  if(myName)SS('lobby');
+  el('lpn').textContent=myName;
+  const g=el('tgrid');g.innerHTML='';
+  (lobbies||[]).forEach(lb=>{
+    const full=lb.playing||(!lb.solo&&lb.seated>=lb.maxP);
+    const isAI=lb.solo||(lb.bots&&lb.bots>0);
+    const card=document.createElement('div');
+    card.className='tcard'+(full?' disabled':'');
+    const stat=lb.playing?'A decorrer...':(full&&!lb.solo?'Mesa Cheia':`${lb.seated}/${lb.maxP} cidadãos`);
+    let sh='';
+    if(lb.solo){sh=`<div class="sdot f">${myName[0]||'?'}</div>`;for(let b=0;b<(lb.bots||3);b++)sh+=`<div class="sdot b">🤖</div>`;}
+    else{for(let i=0;i<lb.maxP;i++){const n=lb.names[i];sh+=`<div class="sdot ${n?'f':''}">${n?n[0]:'?'}</div>`;}}
+    card.innerHTML=`<h3>${lb.name}</h3><span class="tag ${isAI?'ai':''}">${lb.solo?'Solo vs IA':'Multijogador'}</span><div class="seats">${sh}</div><div class="tstat ${full&&!lb.solo?'full':'open'}">${stat}</div>`;
+    if(!full)card.onclick=()=>{myLobbyId=lb.id;send({type:'JOIN_LOBBY',lobbyId:lb.id,playerName:myName});};
+    g.appendChild(card);
+  });
+}
+
+// ── Waiting ───────────────────────────────────────
+function renderWaiting(lb,names,seat){
+  SS('wait');
+  el('wtitle').textContent=lb.name;
+  const c=el('wseats');c.innerHTML='';
+  for(let i=0;i<lb.maxP;i++){
+    const n=names[i]||'';const isMe=i===(seat??mySeat);
+    const d=document.createElement('div');
+    d.className=`wseat ${isMe?'me':''} ${n?'':'empty'}`;
+    d.innerHTML=`<div class="slbl">Lugar ${i+1}</div><div class="snm">${n||(isMe?myName:'Livre...')}</div>`;
+    c.appendChild(d);
+  }
+  const isHost=(seat??mySeat)===0||mySolo;
+  const seated=names.filter(Boolean).length;
+  const ready=mySolo||seated>=lb.maxP;
+  const hint=el('whint');
+  hint.textContent=ready?'Mesa completa!':'À espera de cidadãos...';
+  hint.className='whint'+(ready?'':' pulse');
+  const ws2=el('wstart');
+  ws2.style.display=isHost?'inline-block':'none';
+  ws2.disabled=!ready;
+  ws2.onclick=()=>send({type:'START'});
+}
+
+function leaveLobby(){send({type:'LEAVE_LOBBY'});sessionStorage.removeItem('cat_tok');myToken='';myLobbyId='';G=null;mode=null;selCards=[];closeVillageModal();send({type:'LOBBIES'});SS('lobby');}
+
+// ── Game render ───────────────────────────────────
+function renderGame(st){
+  G=st;
+  // Server sends allHands for all players; populate each player's hand field
+  if(st.allHands) st.players.forEach((p,i)=>{ p.hand = st.allHands[i]; });
+  else if(st.myHand) st.players[st.myIdx].hand = st.myHand;
+  SS('game');
+  if(st.phase==='GAME_OVER'){showVictory(st);return;}
+  const me=st.players[st.myIdx];
+  const cp=st.players[st.cur];
+  const ti=el('tind');
+  ti.textContent=`Ronda ${st.round} — ${cp.name}${cp.isBot?' 🤖':''}`;
+  ti.className='tind'+(st.cur===st.myIdx?' mt':'');
+  // Auto-activate sicel mode when it's my turn and movement is pending
+  if(st.cur===st.myIdx && me.turn?.sicelPending && mode!=='sicel'){
+    mode='sicel';
+    showSicelOverlay(st);
+  } else if(mode==='sicel' && !me.turn?.sicelPending){
+    mode=null;
+    hideSicelOverlay();
+  }
+  drawBoard(st);
+  renderPiles(st);
+  renderTower(st);
+  renderPlayers(st);
+  renderOpponentHands(st);
+  renderActions(st);
+  renderVillages(st);
+  renderHand(st);
+  renderLog(st);
+}
+
+// ── Board ─────────────────────────────────────────
+function drawBoard(st){
+  const hexes=st.hexes;
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  hexes.forEach(h=>{mnx=Math.min(mnx,h.px.x);mny=Math.min(mny,h.px.y);mxx=Math.max(mxx,h.px.x);mxy=Math.max(mxy,h.px.y);});
+  const pad=R+14,SW=mxx-mnx+W3+pad*2,SH=mxy-mny+R*2+pad*2;
+  const ox=-mnx+pad+W3/2,oy=-mny+pad+R;
+  const isMyT=st.cur===st.myIdx;
+  const myTurn=st.players[st.myIdx];
+  const t=myTurn.turn;
+
+  let svg=`<svg viewBox="0 0 ${SW.toFixed(0)} ${SH.toFixed(0)}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="display:block">`;
+  svg+=`<defs><filter id="gw" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+
+  hexes.forEach(h=>{
+    const cx=h.px.x+ox,cy=h.px.y+oy;
+    const pts=hexPts(cx,cy,R-1.5);
+    const isVol=h.type==='vulcao';
+    const isSicel=st.sicel===h.id;
+    const pile=st.piles?.[h.type];
+    const hasOtherToken=(h.tokens||[]).some(pi=>pi!==st.myIdx);
+    const canSel=isMyT&&!isVol&&!isSicel&&!hasOtherToken&&(mode==='c1'||mode==='c2')&&!((t?.thisHexes||[]).includes(h.id));
+    const sicelAdj=mode==='sicel'&&(st.sicelAdj||[]).includes(h.id);
+    const isSelected=mode==='c1'||mode==='c2'?false:false; // selection via click
+    const stroke=isSicel?'#c0392b':(canSel||sicelAdj?'#c9a84c':'rgba(0,0,0,0.5)');
+    const strokeW=isSicel?3:(canSel||sicelAdj?2.5:1.2);
+    const cursor=(canSel||sicelAdj)?'pointer':(isVol?'not-allowed':'default');
+
+    const extraAttr=isSicel&&mode==='sicel'?' draggable="true"':'';
+    svg+=`<g style="cursor:${cursor}" onclick="hclick(${h.id})"${extraAttr}>`;
+    svg+=`<polygon points="${pts}" fill="${isVol?'#2a1808':RFILL[h.type]||'#555'}" stroke="${stroke}" stroke-width="${strokeW}"/>`;
+    svg+=`<polygon points="${hexPts(cx,cy,R*0.68)}" fill="rgba(255,255,255,0.04)" stroke="none"/>`;
+    if(canSel||sicelAdj) svg+=`<polygon points="${pts}" fill="rgba(201,168,76,0.16)" stroke="none"/>`;
+    const iconUri=isVol?SVG_URI.vulcao:SVG_URI[h.type];
+    const is=32;
+    if(iconUri) svg+=`<image href="${iconUri}" x="${(cx-is/2).toFixed(1)}" y="${(cy-is/2-6).toFixed(1)}" width="${is}" height="${is}" style="pointer-events:none"/>`;
+    const nmLabel=isVol?'Vulcão Etna':RNAME[h.type]||'';
+    svg+=`<text x="${cx.toFixed(1)}" y="${(cy+22).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,0.75)" font-family="Cinzel,serif" font-weight="600" style="pointer-events:none">${nmLabel}</text>`;
+    if(!isVol&&pile){
+      const d=pile.disc,isR=RED_SET.has(d);
+      const bx=(cx+R*0.52).toFixed(1),by=(cy-R*0.52).toFixed(1);
+      svg+=`<circle cx="${bx}" cy="${by}" r="13" fill="#0c0a06" stroke="${isR?'#c0392b':'#8b6914'}" stroke-width="1.8"/>`;
+      svg+=`<text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-family="Cinzel,serif" font-weight="700" fill="${isR?'#e05040':'#c9a84c'}" style="pointer-events:none">${d}</text>`;
+    }
+    (h.tokens||[]).forEach((pi,ti2)=>{
+      const ang=Math.PI*(2*ti2/Math.max(h.tokens.length,1))-Math.PI/2;
+      const tr=R*0.44,tx=(cx+tr*Math.cos(ang)).toFixed(1),ty=(cy+tr*Math.sin(ang)+6).toFixed(1);
+      svg+=`<circle cx="${tx}" cy="${ty}" r="13" fill="${PCOL[pi%4]}" stroke="rgba(255,255,255,0.55)" stroke-width="1.5" filter="url(#gw)"/>`;
+      svg+=`<image href="${SVG_URI.trabalhador}" x="${(parseFloat(tx)-9).toFixed(1)}" y="${(parseFloat(ty)-9).toFixed(1)}" width="18" height="18" style="pointer-events:none"/>`;
+      svg+=`<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="8" fill="white" font-weight="bold" style="pointer-events:none">${(st.players[pi]?.name||'')[0]||'?'}</text>`;
+    });
+    if(isSicel){const fs=30;svg+=`<image href="${SVG_URI.fogo}" x="${(cx-fs/2).toFixed(1)}" y="${(cy-fs/2).toFixed(1)}" width="${fs}" height="${fs}" style="pointer-events:none"/>`;}
+    svg+=`</g>`;
+  });
+  svg+=`</svg>`;
+  el('bwrap').innerHTML=svg;
+  // Wire drag-and-drop for sicel movement
+  if(mode==='sicel' && st.cur===st.myIdx){
+    wireSicelDrag(st);
+  }
+}
+
+function wireSicelDrag(st){
+  const svgEl=el('bwrap').querySelector('svg');
+  if(!svgEl)return;
+  const groups=svgEl.querySelectorAll('g[onclick]');
+  const adjIds=new Set(st.sicelAdj||[]);
+
+  groups.forEach(g=>{
+    const onclick=g.getAttribute('onclick')||'';
+    const m=onclick.match(/hclick\((\d+)\)/);
+    if(!m)return;
+    const hexId=parseInt(m[1]);
+    const isSicel=hexId===st.sicel;
+    const isAdj=adjIds.has(hexId);
+
+    if(isSicel){
+      // Make skull hex draggable
+      g.setAttribute('draggable','true');
+      g.style.cursor='grab';
+      g.ondragstart=e=>{
+        e.dataTransfer.setData('text/plain','sicel');
+        e.dataTransfer.effectAllowed='move';
+        g.style.opacity='.6';
+      };
+      g.ondragend=()=>{ g.style.opacity='1'; };
+    }
+
+    if(isAdj){
+      const hex=st.hexes.find(h=>h.id===hexId);
+      const isOccupied=(hex?.tokens||[]).length>0; // no tokens at all allowed
+      if(!isOccupied){
+        // Click (primary)
+        g.style.cursor='pointer';
+        g.style.outline='2px solid #c0392b';
+        g.onclick=()=>{
+          hideSicelOverlay();mode=null;
+          send({type:'CAT_SICELS',hexIdx:hexId});
+        };
+        // Drag (secondary / desktop)
+        g.ondragover=e=>{ e.preventDefault(); g.style.filter='brightness(1.6)'; };
+        g.ondragleave=()=>{ g.style.filter=''; };
+        g.ondrop=e=>{ e.preventDefault(); g.style.filter='';hideSicelOverlay();mode=null;send({type:'CAT_SICELS',hexIdx:hexId}); };
+      }
+    }
+  });
+}
+
+function hclick(hexId){
+  if(!G||G.cur!==G.myIdx||G.players[G.myIdx].isBot)return;
+  const h=G.hexes.find(x=>x.id===hexId);if(!h)return;
+  if(mode==='sicel'){
+    // Fallback click (mobile / touch)
+    const adj=G.sicelAdj||[];
+    if(!adj.includes(hexId)){toast('Move o 🔥 para um hex adjacente!');return;}
+    const hex=G.hexes.find(h=>h.id===hexId);
+    if((hex?.tokens||[]).length>0){toast('Não podes mover o Fogo do Etna para um hex com tokens!');return;}
+    hideSicelOverlay();mode=null;
+    send({type:'CAT_SICELS',hexIdx:hexId});return;
+  }
+  if(mode!=='c1'&&mode!=='c2')return;
+  send({type:'CAT_COLLECT',hexIdx:hexId,take2:mode==='c2'});
+  mode=null;
+}
+
+// ── Piles ─────────────────────────────────────────
+function renderPiles(st){
+  const c=el('rpiles');c.innerHTML='';
+  RES.forEach(r=>{
+    const pile=st.piles?.[r];if(!pile)return;
+    const iR=RED_SET.has(pile.disc);
+    const d=document.createElement('div');d.className='prow';
+    d.innerHTML=`<div class="ricon">${ICON[r]}</div><div class="rnm">${RNAME[r]}</div><div class="rcnt">${pile.totalCollected||0}</div><div class="rdv ${iR?'red':''}">${pile.disc}</div>`;
+    c.appendChild(d);
+  });
+}
+
+// ── Tower ─────────────────────────────────────────
+function renderTower(st){
+  const tower=st.tower||[];
+  const c=el('tdisplay');
+  if(!tower.length){c.innerHTML='<span style="color:var(--stone)">Torre vazia</span>';return;}
+  const top=tower[tower.length-1];const iR=RED_SET.has(top);
+  let h=`<div style="font-size:var(--fs-sm);color:var(--stone);margin-bottom:4px">Topo: <span style="color:${iR?'var(--red-s)':'var(--gold)'};font-weight:600;font-family:Cinzel,serif">${top}${iR?' 🔴':''}</span> (${tower.length} restantes)</div>`;
+  h+=`<div class="tdisc-row">`;
+  [...tower].reverse().forEach((d,i)=>{const r=RED_SET.has(d);h+=`<div class="td ${r?'rd':'bl'} ${i===0?'top':''}">${d}</div>`;});
+  h+=`</div>`;c.innerHTML=h;
+}
+
+// ── Players ───────────────────────────────────────
+function renderPlayers(st){
+  const c=el('pbar');c.innerHTML='';
+  st.players.forEach((p,i)=>{
+    const d=document.createElement('div');d.className=`pcard ${i===st.cur?'ct':''}`;
+    let vh='';for(let v=0;v<3;v++)vh+=`<div class="vp ${v<p.villages.length?'b':''}"></div>`;
+    const sc=p.score||RES.reduce((s,r)=>s+(p.collected?.[r]||0)*(st.piles?.[r]?.disc||1),0);
+    d.innerHTML=`<div class="pdot" style="background:${PCOL[i%4]}"></div><div class="pnl">${p.name}${p.isBot?' 🤖':''}${i===st.myIdx?' ★':''}</div><div class="pvills">${vh}</div>`;
+    c.appendChild(d);
+  });
+}
+
+// ── Actions ───────────────────────────────────────
+function renderActions(st){
+  const c=el('abtns');c.innerHTML='';
+  const isMyT=st.cur===st.myIdx&&!st.players[st.myIdx].isBot;
+  if(st.phase==='GAME_OVER'){c.innerHTML='<div style="color:var(--stone);font-size:var(--fs-sm)">Jogo terminado.</div>';return;}
+  if(!isMyT){c.innerHTML=`<div style="color:var(--stone);font-size:var(--fs-sm);font-style:italic">Vez de ${st.players[st.cur].name}...</div>`;return;}
+  const me=st.players[st.myIdx];const t=me.turn||{};
+  const types=RES.filter(r=>me.hand[r]>0);
+  const maxH=types.length?Math.max(...types.map(r=>me.hand[r])):0;
+  const totalCards=types.reduce((s,r)=>s+(me.hand[r]||0),0);
+  const canFound=types.length>=2&&totalCards>=5&&!t.foundDone;
+  if(mode==='sicel'){
+    const adjIds=st.sicelAdj||[];
+    const validTargets=adjIds.filter(id=>{
+      const hex=st.hexes.find(h=>h.id===id);
+      return hex&&!(hex.tokens||[]).length;
+    });
+    const infoBtn=ab(c,'💀 Clica num hex adjacente para mover o Fogo do Etna','abtn act');
+    infoBtn.style.pointerEvents='none';
+    if(validTargets.length===0){
+      ab(c,'Sem destino — continuar','abtn',()=>{mode=null;send({type:'CAT_SICELS',skip:true});});
+    }
+    return;
+  }
+  if(mode==='c1'||mode==='c2'){
+    ab(c,mode==='c1'?'🎯 Clica num hex livre para recolher 1 carta':'🎯 Clica num hex livre para recolher 2 cartas','abtn act');
+    ab(c,'✕ Cancelar','abtn',()=>{mode=null;renderGame(st);});return;
+  }
+
+  // Normal menu
+  const lbl=document.createElement('div');
+  lbl.style.cssText='font-size:var(--fs-xs);color:var(--stone);margin-bottom:2px;font-family:Cinzel,serif;letter-spacing:.04em';
+  lbl.textContent=t.collects===0?'RECOLHA (obrigatório)':t.collects===1?'2ª RECOLHA (opcional)':'RECOLHAS CONCLUÍDAS';
+  c.appendChild(lbl);
+  if(t.collects<2){
+    ab(c,'Recolher 1 carta','abtn pri',()=>{mode='c1';renderBoard(st);renderActions(st);});
+    const b2=ab(c,'Recolher 2 cartas  (valor desce)','abtn',()=>{mode='c2';renderBoard(st);renderActions(st);});
+    if(!(st.tower||[]).length)b2.disabled=true;
+  }
+  const sep=document.createElement('div');sep.style.cssText='border-top:1px solid var(--border);margin:4px 0';c.appendChild(sep);
+  const b3=ab(c,'(Bónus) Fundar Cidade','abtn pri',canFound&&t.collects>=1?()=>openVillageModal(st):null);
+  b3.disabled=!canFound||t.collects<1;
+  if(!canFound) b3.title=t.foundDone?'Já fundaste uma cidade este turno':totalCards<5?`Precisas de 5 cartas no total (tens ${totalCards})`:'Precisas de 2 tipos de recursos (5 cartas no total)';
+  const bend=ab(c,'✓ Terminar Turno','abtn',t.collects>=1&&!t.sicelPending?()=>send({type:'CAT_END_TURN'}):null);
+  bend.disabled=t.collects<1||t.sicelPending;
+}
+
+function renderBoard(st){drawBoard(st);}
+
+function ab(c,txt,cls,fn){
+  const b=document.createElement('button');b.className=cls||'abtn';b.textContent=txt;
+  if(fn)b.onclick=fn;else b.disabled=true;
+  c.appendChild(b);return b;
+}
+
+// ── Hand ──────────────────────────────────────────
+// ── Opponent Hands ──────────────────────────────────────
+function renderOpponentHands(st){
+  const c=el('opp-hands');c.innerHTML='';
+  const opps=st.players.filter((_,i)=>i!==st.myIdx);
+  if(!opps.length){c.style.display='none';return;}
+  c.style.display='flex';
+  opps.forEach((p,oi)=>{
+    const realIdx=st.players.indexOf(p);
+    const hand=p.hand||{};
+    const total=RES.reduce((s,r)=>s+(hand[r]||0),0);
+    if(total===0&&st.phase!=='GAME_OVER'){
+      // show minimal slot even with 0 cards
+    }
+    const div=document.createElement('div');div.className='opp-hand';
+    const nm=document.createElement('div');nm.className='oname';
+    nm.innerHTML=`<div class="odot" style="background:${PCOL[realIdx%4]}"></div><span>${p.name}${p.isBot?' 🤖':''}</span><span style="margin-left:6px;color:var(--stone);font-size:var(--fs-xs)">${total} carta${total!==1?'s':''}</span>`;
+    div.appendChild(nm);
+    const cards=document.createElement('div');cards.className='opp-cards';
+    RES.forEach(r=>{
+      const cnt=hand[r]||0;
+      for(let i=0;i<cnt;i++){
+        const mc=document.createElement('div');
+        mc.className=`mini-card c-${r}`;
+        mc.innerHTML=`<div>${ICON[r]}</div><div class="mct">${RNAME[r]}</div>`;
+        cards.appendChild(mc);
+      }
+    });
+    if(total===0){
+      const empty=document.createElement('span');empty.style.cssText='color:var(--stone);font-size:var(--fs-sm);font-style:italic';
+      empty.textContent='mão vazia';cards.appendChild(empty);
+    }
+    div.appendChild(cards);
+    // Show opponent's founded villages
+    const oppVillages=p.villages||[];
+    if(oppVillages.length){
+      const villRow=document.createElement('div');
+      villRow.style.cssText='display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;padding-top:5px;border-top:1px solid var(--border)';
+      oppVillages.forEach(v=>{
+        const pile=st.piles?.[v.res];
+        const discVal=pile?.disc??'?';
+        const isRed=RED_SET.has(discVal);
+        const vc=document.createElement('div');
+        vc.style.cssText='display:flex;align-items:center;gap:3px;background:var(--panel);border:1px solid var(--gold-d);border-radius:4px;padding:3px 6px;font-size:var(--fs-sm)';
+        const tints={cereais:'#806010',vinho:'#501040',peixe:'#0a4060',calcario:'#5a5048',azeite:'#3a5010'};
+        vc.style.borderLeftColor=tints[v.res]||'var(--gold-d)';
+        vc.style.borderLeftWidth='3px';
+        vc.innerHTML=`<span style="font-size:var(--fs-base)">${ICON[v.res]||''}</span><span style="color:var(--gold-l);font-family:'Cinzel',serif;font-weight:700">×${v.cards}</span><span style="color:${isRed?'var(--red-s)':'var(--stone)'}">@${discVal}</span>`;
+        vc.title=`${v.cards} ${RNAME[v.res]||v.res} × ${discVal} = ${v.cards*(typeof discVal==='number'?discVal:0)}pts`;
+        villRow.appendChild(vc);
+      });
+      div.appendChild(villRow);
+    }
+    c.appendChild(div);
+  });
+}
+
+// ── Village Cards (face-up on table) ──────────────────────
+function renderVillages(st){
+  const me=st.players[st.myIdx];
+  const villages=me.villages||[];
+  const area=el('villages-area');
+  const divider=el('hand-divider');
+  const vc=el('village-cards');
+  if(!villages.length){
+    area.style.display='none';
+    divider.style.display='none';
+    return;
+  }
+  area.style.display='flex';
+  divider.style.display='block';
+  vc.innerHTML='';
+  villages.forEach((v,idx)=>{
+    const pile=st.piles?.[v.res];
+    const disc=pile?.disc??'?';
+    const isRed=RED_SET.has(disc);
+    const card=document.createElement('div');
+    card.className='village-card';
+    // Color tint matching resource
+    const tints={cereais:'#806010',vinho:'#501040',peixe:'#0a4060',calcario:'#5a5048',azeite:'#3a5010'};
+    card.style.background=`linear-gradient(170deg,${tints[v.res]||'#2a2418'},var(--panel2))`;
+    card.style.borderColor='var(--gold-d)';
+    card.innerHTML=`
+      <div class="vc-top"></div>
+      <div class="vc-icon">${ICON[v.res]||'?'}</div>
+      <div class="vc-count">×${v.cards}</div>
+      <div class="vc-name">${RNAME[v.res]||v.res}</div>
+      <div title="Valor actual do disco" style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:var(--ink);border:1.5px solid ${isRed?'var(--red-s)':'var(--gold-d)'};display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:var(--fs-xs);font-weight:700;color:${isRed?'var(--red-s)':'var(--gold)'}">${disc}</div>
+    `;
+    // Tooltip: score for this village
+    const score=(v.cards)*(typeof disc==='number'?disc:0);
+    card.title=`${v.cards} ${RNAME[v.res]||v.res} × ${disc} = ${score}pts`;
+    vc.appendChild(card);
+  });
+  // Show total from villages
+  const total=villages.reduce((s,v)=>{
+    const disc=st.piles?.[v.res]?.disc??0;
+    return s+(v.cards*(typeof disc==='number'?disc:0));
+  },0);
+  // Update score display in player bar if needed
+}
+
+function renderHand(st){
+  const me=st.players[st.myIdx];
+  const c=el('hcards');c.innerHTML='';
+  let tot=0;RES.forEach(r=>tot+=(me.hand[r]||0));
+  el('hlbl').textContent=`${tot} carta${tot!==1?'s':''}`;
+  RES.forEach(r=>{
+    const cnt=me.hand[r]||0;
+    for(let i=0;i<cnt;i++){
+      const key=`${r}_${i}`;
+      const cd=document.createElement('div');
+      cd.className=`card c-${r}${selCards.includes(key)?' sel':''}`;
+      cd.innerHTML=`<div class="ci">${ICON[r]}</div><div class="ct">${RNAME[r]}</div>`;
+      cd.onclick=()=>{if(mode!=='found')return;const idx=selCards.indexOf(key);if(idx>=0)selCards.splice(idx,1);else selCards.push(key);renderHand(st);renderActions(st);};
+      c.appendChild(cd);
+    }
+  });
+}
+
+// ── Log ───────────────────────────────────────────
+function renderLog(st){
+  const c=el('log-box');c.innerHTML='';
+  (st.log||[]).slice(0,14).forEach(msg=>{
+    const d=document.createElement('div');
+    d.className='log-entry'+(msg.startsWith('')||msg.startsWith('🏛')||msg.startsWith('⚑')?' hl':'');
+    d.textContent=msg;c.appendChild(d);
+  });
+}
+
+// ── Found village ─────────────────────────────────
+// ── Village Founding Modal ─────────────────────────────────
+let _vmod_keepRes=null, _vmod_affectRes=null, _vmod_st=null;
+
+function openVillageModal(st){
+  _vmod_keepRes=null; _vmod_affectRes=null; _vmod_st=st;
+  renderVillageModal();
+  document.getElementById('village-modal').classList.add('on');
+}
+
+function closeVillageModal(){
+  document.getElementById('village-modal').classList.remove('on');
+  _vmod_keepRes=null; _vmod_affectRes=null;
+}
+
+function renderVillageModal(){
+  const hand=(_vmod_st?.players[_vmod_st.myIdx]?.hand)||{};
+  const types=RES.filter(r=>(hand[r]||0)>0);
+
+  // Step label
+  const stepTxt=document.getElementById('vmod-step-txt');
+  if(!_vmod_keepRes)
+    stepTxt.textContent='Passo 1 — Escolhe a maioria (todas as cartas desse tipo vão para a cidade e contam para pontos)';
+  else
+    stepTxt.textContent='Passo 2 — Escolhe a minoria (essas cartas são descartadas e o valor da torre sobe para esse recurso)';
+
+  // Type buttons
+  const c=document.getElementById('vmod-types'); c.innerHTML='';
+  types.forEach(r=>{
+    const cnt=hand[r]||0;
+    const isKeep=r===_vmod_keepRes, isAffect=r===_vmod_affectRes;
+    const btn=document.createElement('button');
+    btn.className='vtype-btn'+(isKeep?' selected-keep':isAffect?' selected-affect':'');
+    btn.innerHTML=`<div class="vt-icon">${ICON[r]}</div><div class="vt-name">${RNAME[r]}</div><div class="vt-cnt">${cnt} carta${cnt!==1?'s':''}</div>`;
+    btn.onclick=()=>{
+      if(!_vmod_keepRes){
+        // Step 1: pick founding type
+        _vmod_keepRes=r; _vmod_affectRes=null;
+      } else if(r===_vmod_keepRes){
+        // Deselect founding type
+        _vmod_keepRes=null; _vmod_affectRes=null;
+      } else if(!_vmod_affectRes){
+        // Step 2: pick minority to affect tower
+        _vmod_affectRes=r;
+      } else if(r===_vmod_affectRes){
+        // Deselect minority
+        _vmod_affectRes=null;
+      } else {
+        // Change minority selection
+        _vmod_affectRes=r;
+      }
+      renderVillageModal();
+    };
+    c.appendChild(btn);
+  });
+
+  // Summary
+  const summary=document.getElementById('vmod-summary');
+  const confirm=document.getElementById('vmod-confirm');
+  if(_vmod_keepRes && _vmod_affectRes){
+    const keepCnt=hand[_vmod_keepRes]||0;
+    const affCnt=hand[_vmod_affectRes]||0;
+    // What stays in hand
+    const remaining=types.filter(r=>r!==_vmod_keepRes&&r!==_vmod_affectRes);
+    let sumHTML=`<div class="keep-line"><img src="${SVG_URI.cidade}" width="18" height="18" style="vertical-align:middle"> Cidade: ${ICON[_vmod_keepRes]} ${RNAME[_vmod_keepRes]} × ${keepCnt} (guardado na cidade)</div>`;
+    sumHTML+=`<div class="affect-line">🔻 Descartado: ${ICON[_vmod_affectRes]} ${RNAME[_vmod_affectRes]} × ${affCnt} → melhora valor na torre</div>`;
+    if(remaining.length){
+      const remStr=remaining.map(r=>`${ICON[r]} ${RNAME[r]}×${hand[r]||0}`).join('  ');
+      sumHTML+=`<div style="color:var(--stone);margin-top:4px">✋ Fica na mão: ${remStr}</div>`;
+    }
+    summary.innerHTML=sumHTML; summary.style.display='block';
+    confirm.style.display='inline-block';
+  } else {
+    summary.style.display='none';
+    confirm.style.display='none';
+  }
+}
+
+function confirmVillage(){
+  if(!_vmod_keepRes||!_vmod_affectRes){toast('Seleciona founding + minoria');return;}
+  const keepRes=_vmod_keepRes, affectRes=_vmod_affectRes;
+  closeVillageModal();
+  send({type:'CAT_VILLAGE',keepRes,affectRes});
+}
+
+document.getElementById('village-modal').addEventListener('click',e=>{
+  if(e.target===document.getElementById('village-modal'))closeVillageModal();
+});
+
+// ── Victory ───────────────────────────────────────
+function showVictory(st){
+  SS('victory');
+  const sorted=[...st.players].sort((a,b)=>(b.score||0)-(a.score||0));
+  el('vwinner').textContent=`${sorted[0].name} vence!`;
+  const tb=el('stbody');tb.innerHTML='';
+  sorted.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    // Compute breakdown from villages
+    const breakdown=(p.villages||[]).map(v=>{
+      const disc=st.piles?.[v.res]?.disc??1;
+      return `${ICON[v.res]||''}${v.cards}×${disc}`;
+    }).join(' + ')||'—';
+    const finalScore=(p.villages||[]).reduce((s,v)=>s+(v.cards*(st.piles?.[v.res]?.disc??1)),0);
+    tr.innerHTML=`<td>${i+1}</td><td>${p.name}${p.isBot?' 🤖':''}</td><td style="font-size:var(--fs-sm);color:var(--stone)">${breakdown}</td><td style="color:var(--gold);font-weight:700">${finalScore}</td>`;
+    tb.appendChild(tr);
+  });
+  el('btn-again').onclick=()=>{send({type:'RESTART'});};
+  el('btn-again').style.display=(mySolo||mySeat===0)?'inline-block':'none';
+}
+
+function backToLobby(){G=null;mode=null;selCards=[];closeVillageModal();send({type:'LOBBIES'});SS('lobby');}
+function confirmLeave(){
+  showModal('Sair do Jogo','Tens a certeza que queres abandonar a partida?',[
+    {l:'Sair',a:()=>{closeModal();leaveLobby();}},
+    {l:'Cancelar',a:closeModal},
+  ]);
+}
+
+// ── Modal ─────────────────────────────────────────
+function showModal(title,body,btns){
+  el('mtitle').textContent=title;el('mbody').textContent=body;
+  el('mres-opts').style.display='none';el('mres-opts').innerHTML='';
+  const c=el('mbtns');c.innerHTML='';
+  btns.forEach(b=>{const btn=document.createElement('button');btn.className='btn sec';btn.textContent=b.l;btn.onclick=b.a;c.appendChild(btn);});
+  el('movl').classList.add('on');
+}
+function closeModal(){el('movl').classList.remove('on');}
+el('movl').onclick=e=>{if(e.target===el('movl'))closeModal();};
+
+function pickRes(title,body,opts,cb){
+  el('mtitle').textContent=title;el('mbody').textContent=body;
+  const ro=el('mres-opts');ro.style.display='flex';ro.innerHTML='';
+  let chosen=null;
+  opts.forEach(r=>{
+    const b=document.createElement('div');b.className='mres-btn';
+    b.innerHTML=`${ICON[r]}<br>${RNAME[r]}`;
+    b.onclick=()=>{
+      ro.querySelectorAll('.mres-btn').forEach(x=>x.classList.remove('chosen'));
+      b.classList.add('chosen');chosen=r;
+      el('mbtns').querySelector('.btn-confirm').disabled=false;
+    };
+    ro.appendChild(b);
+  });
+  const c=el('mbtns');c.innerHTML='';
+  const conf=document.createElement('button');conf.className='btn btn-confirm';conf.textContent='Confirmar';conf.disabled=true;
+  conf.onclick=()=>{if(chosen){closeModal();cb(chosen);}};c.appendChild(conf);
+  const can=document.createElement('button');can.className='btn sec';can.textContent='Cancelar';can.onclick=closeModal;c.appendChild(can);
+  el('movl').classList.add('on');
+}
+
+// ── Boot ──────────────────────────────────────────
+myToken=sessionStorage.getItem('cat_tok')||'';
+SS('name');
+connect();
+
+// ── Fogo do Etna overlay ───────────────────────────────────────────
+function showSicelOverlay(st){
+  const ovl=el('etna-ovl');
+  const adjIds=st.sicelAdj||[];
+  const validTargets=adjIds.filter(id=>{
+    const hex=st.hexes.find(h=>h.id===id);
+    return hex&&!(hex.tokens||[]).some(pi=>pi!==st.myIdx);
+  });
+  if(!validTargets.length){
+    el('sicel-title').textContent='Sem destino válido';
+    el('sicel-body').textContent='Não existe hex adjacente livre. O Fogo do Etna fica no lugar.';
+    el('sicel-hint').style.display='none';
+    ovl.classList.add('on');
+    setTimeout(()=>{ ovl.classList.remove('on'); mode=null; send({type:'CAT_SICELS',skip:true}); },2200);
+    return;
+  }
+  el('sicel-title').textContent='Erupção do Etna! 🔴';
+  el('sicel-body').textContent='Clica num hex adjacente para mover o Fogo do Etna.';
+  el('sicel-hint').style.display='';
+  ovl.classList.add('on');
+  setTimeout(()=>{ ovl.classList.remove('on'); },3200);
+}
+
+function hideSicelOverlay(){
+  el('etna-ovl').classList.remove('on');
+}
+</script>
+
+<!-- FOGO DO ETNA OVERLAY -->
+<div id="etna-ovl">
+  <div class="sicel-msg">
+    <span class="skull">🔥</span>
+    <h3 id="sicel-title">Erupção do Etna!</h3>
+    <p id="sicel-body">Clica num hex adjacente para mover o Fogo do Etna.</p>
+    <div class="sicel-drag-hint" id="sicel-hint">Clica no hex de destino →</div>
+  </div>
+</div>
+
+<!-- VILLAGE FOUNDING MODAL -->
+<div id="village-modal">
+  <div class="vmod-box">
+    <h3> Fundar Cidade</h3>
+    <div class="vmod-step" id="vmod-step-txt">Passo 1: Escolhe o tipo a fundar (todas as cartas ficam na cidade)</div>
+    <div class="vmod-types" id="vmod-types"></div>
+    <div class="vmod-summary" id="vmod-summary" style="display:none"></div>
+    <div class="vmod-footer">
+      <button class="btn sec" onclick="closeVillageModal()">Cancelar</button>
+      <button class="btn" id="vmod-confirm" style="display:none" onclick="confirmVillage()">✓ Fundar Cidade</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// Reveal page only after fonts are loaded (eliminates FOUT)
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{
+    document.documentElement.classList.add('fonts-loaded');
+  });
+} else {
+  // Fallback for older browsers
+  document.documentElement.classList.add('fonts-loaded');
+}
+</script>
+</body>
+</html>
