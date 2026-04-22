@@ -1118,11 +1118,13 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <div class="deck-info" id="deck-info">—</div>
     </div>
     <audio id="ambient-audio" src="/ambient.mp3" loop preload="auto"></audio>
-    <button class="ambient-btn" id="ambient-btn" onclick="toggleAmbient()" title="Música ambiente">
-      <span class="amb-icon" id="amb-icon">🔇</span>
-      <span id="amb-label">Som</span>
-    </button>
-    <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="ambient-btn" id="ambient-btn" onclick="toggleAmbient()" title="Música ambiente">
+        <span class="amb-icon" id="amb-icon">🔇</span>
+        <span id="amb-label">Som</span>
+      </button>
+      <button class="btn btn-outline btn-sm" id="btn-leave-game">Sair</button>
+    </div>
   </div>
   <div class="players-bar" id="players-bar"></div>
   <div class="table-area">
