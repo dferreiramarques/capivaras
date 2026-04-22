@@ -685,11 +685,11 @@ body {
 
 /* ── LOGO ── */
 .game-logo {
-  font-family: 'Fraunces', serif;
-  font-size: 4rem; font-weight: 900;
-  color: var(--ink); letter-spacing: -.02em; line-height: 1;
+  font-family: 'Titan One', 'Fraunces', serif;
+  font-size: 4rem; font-weight: 400;
+  color: var(--amber); letter-spacing: .01em; line-height: 1;
 }
-.game-logo span { color: var(--ink); }
+.game-logo span { color: var(--amber); }
 .game-tagline { font-size: .9rem; color: var(--muted); margin-bottom: 32px; font-style: italic; font-family: 'Fraunces', serif; }
 .h-rule { width: 36px; height: 2px; background: var(--amber); opacity: .5; margin: 0 auto 28px; border-radius: 2px; }
 
@@ -772,12 +772,12 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .game-header {
   width: 100%; max-width: 1000px;
   display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: nowrap; gap: 6px;
-  margin-bottom: 8px; padding-bottom: 8px;
+  flex-wrap: nowrap; gap: 12px;
+  margin-bottom: 8px; padding: 10px 0 10px;
   border-bottom: 1.5px solid var(--border2);
 }
 .header-left {
-  display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;
+  display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;
 }
 .header-title {
   font-family: 'Titan One', 'Fraunces', serif; font-size: 3rem; font-weight: 400;
@@ -786,7 +786,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .header-title span { color: var(--amber); }
 .bird-token {
   background: #fff8e0; border: 1.5px solid #e8c878;
-  padding: 3px 8px; border-radius: 20px;
+  padding: 5px 10px; border-radius: 20px; align-self: center;
   font-size: .7rem; color: #8a5a00; font-weight: 700;
   display: inline-flex; align-items: center; gap: 5px;
   white-space: nowrap; overflow: hidden; min-width: 0;
@@ -827,11 +827,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   background: var(--card-bg); user-select: none;
   box-shadow: 0 2px 8px rgba(100,60,20,.1);
 }
-.cap-card:hover:not(.reveal-card) {
-  border-color: var(--amber);
-  transform: translateY(-5px);
-  box-shadow: 0 10px 28px rgba(100,60,20,.18);
-}
+/* hover removed — would reveal betting state */
 .cap-card.selected {
   border-color: var(--amber);
   background: var(--card-sel);
