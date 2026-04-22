@@ -773,11 +773,11 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   width: 100%; max-width: 1000px;
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: nowrap; gap: 12px;
-  margin-bottom: 8px; padding: 10px 0 10px;
+  margin-bottom: 8px; padding: 6px 0;
   border-bottom: 1.5px solid var(--border2);
 }
 .header-left {
-  display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;
+  display: flex; align-items: center; gap: 12px; min-width: 0;
 }
 .header-title {
   font-family: 'Titan One', 'Fraunces', serif; font-size: 3rem; font-weight: 400;
@@ -1102,7 +1102,6 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 <div class="screen" id="screen-game">
   <div class="game-header">
     <div class="header-left">
-      <div class="header-title">Capivaras</div>
       <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
     </div>
     <div class="deck-info" id="deck-info">—</div>
@@ -1110,7 +1109,6 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   </div>
   <div class="players-bar" id="players-bar"></div>
   <div class="table-area">
-    <div class="table-label">Cartas na mesa</div>
     <div class="table-cards" id="table-cards"></div>
   </div>
   <div class="status-bar">
