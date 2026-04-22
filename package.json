@@ -1,17 +1,17 @@
 {
-  "name": "catania",
+  "name": "capivaras",
   "version": "1.0.0",
-  "description": "Catania \u2014 a game by David Marques (CC BY 4.0)",
+  "description": "Jogo multijogador das Capivaras do Pantanal",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.0.0"
   },
-  "license": "CC-BY-4.0",
-  "author": "David Marques"
+  "license": "CC-BY-NC-ND-4.0"
 }
