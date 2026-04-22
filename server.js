@@ -1414,7 +1414,7 @@ function renderGame(){
     }
     chip.appendChild(lilDiv);
 
-    const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):(state.phase==='REVEAL'&&state.betsPlaced[i]!=null?'Apostou':'');
+    const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):(state.phase==='REVEAL'&&state.betsPlaced[i]!=null?'Apostou':'[Zzz...]');
     const bsDiv=document.createElement('div'); bsDiv.className='pbet'; bsDiv.textContent=bs; chip.appendChild(bsDiv);
 
     bar.appendChild(chip);
