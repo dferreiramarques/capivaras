@@ -623,7 +623,7 @@ const CLIENT_HTML = `<!DOCTYPE html>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,900;1,9..144,400&family=Nunito:wght@400;600;700&family=Titan+One&display=swap" rel="stylesheet">
 <style>
 /* ─────────────────────────────────────────────────────────────────────────
    PALETTE — extracted from card watercolor art
@@ -780,8 +780,8 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;
 }
 .header-title {
-  font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 900;
-  color: var(--ink); letter-spacing: -.01em; white-space: nowrap;
+  font-family: 'Titan One', 'Fraunces', serif; font-size: 3rem; font-weight: 400;
+  color: var(--amber); letter-spacing: .01em; white-space: nowrap; line-height: 1;
 }
 .header-title span { color: var(--amber); }
 .bird-token {
@@ -809,7 +809,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .pname   { font-size: .74rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .ppts    { font-family: 'Fraunces', serif; font-size: 1.2rem; font-weight: 900; color: var(--amber); }
 .plilies { font-size: .67rem; margin-top: 2px; color: var(--muted); }
-.pbet    { font-size: .65rem; color: var(--teal2); margin-top: 2px; font-weight: 600; }
+.pbet    { font-size: .65rem; color: var(--teal2); margin-top: 2px; font-weight: 600; min-height: 1em; line-height: 1; }
 
 /* ── TABLE ── */
 .table-area  { width: 100%; max-width: 100%; margin-bottom: 10px; }
@@ -1414,8 +1414,8 @@ function renderGame(){
     }
     chip.appendChild(lilDiv);
 
-    const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):'';
-    if(bs){ const bsDiv=document.createElement('div'); bsDiv.className='pbet'; bsDiv.textContent=bs; chip.appendChild(bsDiv); }
+    const bs=state.phase==='BETTING'?(state.betsPlaced[i]?'Apostou':'A pensar...'):(state.phase==='REVEAL'&&state.betsPlaced[i]!=null?'Apostou':'');
+    const bsDiv=document.createElement('div'); bsDiv.className='pbet'; bsDiv.textContent=bs; chip.appendChild(bsDiv);
 
     bar.appendChild(chip);
   });
