@@ -828,7 +828,14 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 /* ── TABLE ── */
 .table-area  { width: 100%; max-width: 100%; margin-bottom: 10px; }
 .table-label { font-size: .7rem; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; text-align: center; width: 100%; }
-.table-cards { display: grid; gap: 10px; grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)))); justify-content: center; }
+.table-cards {
+  display: grid; gap: 10px; justify-content: center;
+  /* largura da carta é a mais pequena entre: limite absoluto, o que cabe
+     na largura do ecrã, e o que cabe na ALTURA disponível (convertido via
+     aspect-ratio 300/420 da carta) — para a mesa nunca empurrar a área de
+     apostas/capivaras recolhidas para fora do ecrã (abaixo do fold). */
+  grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)), calc((100vh - 460px) * 5 / 7)));
+}
 
 /* ── THE CARD ── */
 .cap-card {
