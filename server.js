@@ -834,7 +834,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
      na largura do ecrã, e o que cabe na ALTURA disponível (convertido via
      aspect-ratio 300/420 da carta) — para a mesa nunca empurrar a área de
      apostas/capivaras recolhidas para fora do ecrã (abaixo do fold). */
-  grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)), calc((100vh - 460px) * 5 / 7)));
+  grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)), calc((100vh - 610px) * 5 / 7)));
 }
 
 /* ── THE CARD ── */
@@ -923,9 +923,14 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 /* ── MY SCORED ── */
 .my-area { width: 100%; max-width: 1000px; padding-bottom: 20px; }
 .my-area-label { font-size: .68rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
-.my-scored { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+/* Fila horizontal de largura fixa em vez de "wrap" — assim que se ganham
+   várias capivaras, um grid que cresce em altura empurra o resto da
+   página para fora do ecrã outra vez (o cap de altura das cartas da
+   mesa não tem como prever quanto esta fila vai crescer). Uma fila que
+   desliza para os lados mantém a altura sempre igual a 1 carta. */
+.my-scored { display: flex; gap: 10px; flex-wrap: nowrap; align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
 .mini-card {
-  width: 100px; background: var(--card-bg);
+  width: 100px; flex-shrink: 0; background: var(--card-bg);
   border: 1.5px solid var(--border2); border-radius: var(--radius-sm);
   overflow: hidden; font-size: .7rem; color: var(--ink2);
   box-shadow: var(--shadow-card);
