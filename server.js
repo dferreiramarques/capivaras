@@ -173,7 +173,7 @@ function makeLobby(id, name, solo, maxHuman) {
   return { id, name, solo, maxHuman,
     players: new Array(n).fill(null), names: new Array(n).fill(''),
     tokens:  new Array(n).fill(null), graceTimers: new Array(n).fill(null),
-    autoTimers: new Array(n).fill(null), seatMap: null, game: null };
+    autoTimers: new Array(n).fill(null), seatMap: null, game: null, ephemeral: false };
 }
 
 function initLobbies() {
@@ -249,9 +249,15 @@ function lobbyInfo(l) {
            names: l.names.filter(Boolean) };
 }
 
+// Ephemeral (per-player solo) instances are private clones of the 'solo'
+// template — they never show up in the public lobby list.
+function publicLobbies() {
+  return Object.values(lobbies).filter(l => !l.ephemeral).map(lobbyInfo);
+}
+
 let wss;
 function broadcastLobbyList() {
-  const list = Object.values(lobbies).map(lobbyInfo);
+  const list = publicLobbies();
   for (const ws of wss.clients) {
     if (ws.readyState !== 1) continue;
     const st = wsState.get(ws);
@@ -414,13 +420,15 @@ function hardLeaveBySlot(lobby, ls) {
     const rem = lobby.seatMap ? lobby.seatMap.filter(li => lobby.players[li]).length : 0;
     if (rem < 2) endGame(lobby);
   }
+  // Private solo instance: nobody else can ever use it again, so free it now.
+  if (lobby.ephemeral) delete lobbies[lobby.id];
   broadcastLobbyList();
 }
 
 // ─── ACTION HANDLER ──────────────────────────────────────────────────────────
 function handleAction(ws, msg) {
   if (msg.type === 'PING')      { sendTo(ws, { type: 'PONG' }); return; }
-  if (msg.type === 'LOBBIES')   { sendTo(ws, { type: 'LOBBIES', lobbies: Object.values(lobbies).map(lobbyInfo) }); return; }
+  if (msg.type === 'LOBBIES')   { sendTo(ws, { type: 'LOBBIES', lobbies: publicLobbies() }); return; }
   if (msg.type === 'RECONNECT') { handleReconnect(ws, msg); return; }
   if (msg.type === 'JOIN_LOBBY') { handleJoin(ws, msg); return; }
 
@@ -430,7 +438,7 @@ function handleAction(ws, msg) {
 
   if (msg.type === 'LEAVE_LOBBY') {
     hardLeaveBySlot(lobby, ls); wsState.delete(ws);
-    sendTo(ws, { type: 'LOBBIES', lobbies: Object.values(lobbies).map(lobbyInfo) }); return;
+    sendTo(ws, { type: 'LOBBIES', lobbies: publicLobbies() }); return;
   }
   if (msg.type === 'REQUEST_STATE') {
     if (g) sendTo(ws, { type: 'GAME_STATE', state: buildView(g, findGameSeat(lobby, ls)) });
@@ -472,19 +480,31 @@ function handleAction(ws, msg) {
 }
 
 function handleJoin(ws, msg) {
-  const { lobbyId, playerName } = msg;
-  const lobby = lobbies[lobbyId];
+  let lobby = lobbies[msg.lobbyId];
   if (!lobby) { sendTo(ws, { type: 'ERROR', text: 'Mesa não encontrada.' }); return; }
+
+  // Solo is a template, not a shared table: each player who "enters" it gets
+  // their own private, ephemeral instance, cloned from the template. It never
+  // shows up in the lobby list and is torn down as soon as the player leaves
+  // (or fails to reconnect), so it can never block others and never gets stuck.
+  if (lobby.solo && !lobby.ephemeral) {
+    const instId = `solo#${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+    const instance = makeLobby(instId, lobby.name, true, lobby.maxHuman);
+    instance.ephemeral = true;
+    lobbies[instId] = instance;
+    lobby = instance;
+  }
+
   if (!lobby.solo && lobby.game && lobby.game.phase !== 'GAME_OVER') {
     sendTo(ws, { type: 'ERROR', text: 'Jogo em curso.' }); return; }
   const seat = lobby.players.findIndex(p => p === null);
   if (seat === -1) { sendTo(ws, { type: 'ERROR', text: 'Mesa cheia.' }); return; }
-  const name  = (playerName||'').trim().slice(0,20)||'Jogador';
+  const name  = (msg.playerName||'').trim().slice(0,20)||'Jogador';
   const token = Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
   lobby.players[seat]=ws; lobby.names[seat]=name; lobby.tokens[seat]=token;
-  wsState.set(ws, { lobbyId, seat, gameSeat: seat, token });
-  sessions[token] = { lobbyId, seat, name };
-  sendTo(ws, { type:'JOINED', seat, token, lobbyId, solo:lobby.solo, name, lobby:lobbyInfo(lobby), names:lobby.names });
+  wsState.set(ws, { lobbyId: lobby.id, seat, gameSeat: seat, token });
+  sessions[token] = { lobbyId: lobby.id, seat, name };
+  sendTo(ws, { type:'JOINED', seat, token, lobbyId: lobby.id, solo:lobby.solo, name, lobby:lobbyInfo(lobby), names:lobby.names });
   lobby.players.forEach((p,i) => { if(p&&i!==seat) sendTo(p,{type:'PLAYER_JOINED',seat,name,lobby:lobbyInfo(lobby)}); });
   broadcastLobbyList();
   if (lobby.solo) {
