@@ -189,7 +189,7 @@ function newGame(names, isSolo) {
   return {
     players: names.map(name => ({ name, scored: [], birdCards: 0 })),
     n, deck, discard: [], table: deck.splice(0, n),
-    bets: new Array(n).fill(null), birdHolder: null,
+    bets: new Array(n).fill(null), birdHolder: null, birdTie: 0,
     phase: 'BETTING', deckPass: 0, lastResult: null,
     isSolo, turnGen: 0, winnerIdx: null, finalScores: null,
   };
@@ -272,8 +272,9 @@ function checkAllBetsIn(lobby) {
   if (g.bets.every(b => b !== null)) resolveRound(lobby);
 }
 
-function resolveRound(lobby) {
-  const g = lobby.game;
+// Pure round resolution (no timers/sockets) — also injected into the client
+// and reused by the tutorial, so both always follow the same rules.
+function resolveBets(g) {
   const betCount  = new Array(g.n).fill(0);
   const betBySeat = new Array(g.n).fill(-1);
   g.bets.forEach((bet, seat) => { if (bet !== null) { betCount[bet]++; betBySeat[bet] = seat; } });
@@ -293,41 +294,45 @@ function resolveRound(lobby) {
     }
   });
 
-  // Second pass: resolve bird token with tie-breaking
-  // Rule: in case of a tie (multiple players with equal claim), token doesn't move
+  // Second pass: bird token. It goes to whoever has MORE bird cards than the
+  // bar — the holder's count (holder +1 to take it), or, while the token is
+  // on the table, the level of the last tie (0 at the start). If several
+  // players share the top count, it's a tie and the token doesn't move; a
+  // tie with the token on the table raises the bar to that count (so it
+  // goes to the first player to get one bird card more than the tie).
+  const birdGained = Object.keys(result.winners).some(pos => g.table[pos].bird);
   const prev = g.birdHolder;
-  if (prev === null) {
-    // First acquisition: find all players who gained a bird card this round
-    const birdWinners = Object.entries(result.winners)
-      .filter(([pos]) => g.table[pos].bird)
-      .map(([, seat]) => seat);
-    if (birdWinners.length === 1) {
-      g.birdHolder = birdWinners[0];
-      result.birdUpdate = { type: 'first', seat: birdWinners[0], name: g.players[birdWinners[0]].name };
-    } else if (birdWinners.length > 1) {
-      // Tie on first acquisition — token stays on table (null)
-      result.birdUpdate = { type: 'tie_first', seats: birdWinners, names: birdWinners.map(s => g.players[s].name) };
-    }
-  } else {
-    // Steal check: find all non-holders who now exceed the holder's count
-    const holderCount = g.players[prev].birdCards;
-    const stealCandidates = g.players.reduce((acc, p, i) => {
-      if (i !== prev && p.birdCards > holderCount) acc.push(i);
-      return acc;
-    }, []);
-    if (stealCandidates.length === 1) {
-      const thief = stealCandidates[0];
-      g.birdHolder = thief;
-      result.birdUpdate = { type: 'steal', seat: thief, from: prev,
-        name: g.players[thief].name, fromName: g.players[prev].name };
-    } else if (stealCandidates.length > 1) {
-      // Tie on steal — token stays with current holder
-      result.birdUpdate = { type: 'tie_steal', seats: stealCandidates, names: stealCandidates.map(s => g.players[s].name) };
+  const bar = prev !== null ? g.players[prev].birdCards : g.birdTie;
+  const over = birdGained ? g.players.map((p, i) => i).filter(i => i !== prev && g.players[i].birdCards > bar) : [];
+  if (over.length) {
+    const top = Math.max(...over.map(i => g.players[i].birdCards));
+    const leaders = over.filter(i => g.players[i].birdCards === top);
+    const names = leaders.map(s => g.players[s].name);
+    if (leaders.length === 1) {
+      const seat = leaders[0];
+      g.birdHolder = seat;
+      result.birdUpdate = prev === null
+        ? { type: 'first', seat, name: names[0] }
+        : { type: 'steal', seat, from: prev, name: names[0], fromName: g.players[prev].name };
+    } else if (prev === null) {
+      g.birdTie = top;
+      result.birdUpdate = { type: 'tie_first', seats: leaders, names };
+    } else {
+      result.birdUpdate = { type: 'tie_steal', seats: leaders, names };
     }
   }
 
-  g.discard.push(...g.table.map(c => ({ ...c, lilies: [...c.lilies] })));
+  // Only cards nobody won (tied or unbet) go to the discard — won cards stay
+  // with their owners and never come back in the second pass.
+  g.table.forEach((c, pos) => {
+    if (result.winners[pos] === undefined) g.discard.push({ ...c, lilies: [...c.lilies] });
+  });
   g.lastResult = result; g.phase = 'REVEAL'; g.turnGen++;
+}
+
+function resolveRound(lobby) {
+  const g = lobby.game;
+  resolveBets(g);
   lobby.autoTimers.forEach((t, i) => { if (t) { clearTimeout(t); lobby.autoTimers[i] = null; } });
   broadcastGame(lobby);
 
@@ -1097,6 +1102,68 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 }
 .ambient-btn:hover { background: #e8f5f3; }
 .ambient-btn .amb-icon { font-size: .95rem; line-height: 1; }
+
+/* ── TUTORIAL (tour guiado) ── */
+/* Spotlight: escurece tudo menos os alvos. pointer-events:none para os
+   elementos destacados (cartas, botões) continuarem clicáveis por baixo. */
+.tut-spot { position: fixed; inset: 0; z-index: 300; pointer-events: none; display: none; }
+.tut-spot.active { display: block; }
+.tut-spot svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tut-ring {
+  position: fixed; pointer-events: none;
+  border: 2.5px solid var(--gold); border-radius: var(--radius-md);
+  box-shadow: 0 0 0 4px rgba(232,176,32,.25);
+  animation: tutPulse 1.6s ease-in-out infinite;
+}
+@keyframes tutPulse { 50% { box-shadow: 0 0 0 9px rgba(232,176,32,.1); } }
+.tut-coach {
+  position: fixed; z-index: 310; display: none;
+  width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  background: var(--panel-b); border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px 12px;
+  box-shadow: var(--shadow-card-hover);
+  transition: top .2s, left .2s;
+}
+.tut-coach.active { display: block; }
+.tut-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--ink); line-height: 1.2; margin-bottom: 6px; }
+.tut-text { font-size: .86rem; color: var(--ink2); line-height: 1.55; }
+.tut-text b { color: var(--ink); }
+.tut-text ul { margin: 6px 0 0 18px; }
+.tut-text li { margin-bottom: 4px; }
+.tut-lines div { margin-top: 5px; }
+.tut-queue { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.tut-qchip {
+  padding: 3px 10px; border-radius: var(--radius-pill);
+  font-size: .72rem; font-weight: 700; white-space: nowrap;
+  background: #f0ece4; color: var(--ink2); border: 1.5px solid var(--border2);
+  transition: all .2s;
+}
+.tut-qchip.now  { background: var(--amber); color: #fff; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(196,124,40,.2); }
+.tut-qchip.done { opacity: .45; }
+.tut-qarrow { color: var(--muted); font-size: .72rem; }
+.tut-thinking { margin-top: 8px; font-size: .8rem; font-weight: 700; color: var(--teal2); }
+.tut-shortcuts { display: flex; gap: 6px; margin-top: 10px; }
+.tut-shortcuts .btn { flex: 1; padding: 8px 6px; }
+.tut-progress { height: 4px; background: var(--border2); border-radius: var(--radius-pill); margin: 12px 0 8px; overflow: hidden; }
+.tut-progress > div { height: 100%; background: var(--amber); transition: width .25s; }
+.tut-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tut-actions .btn-primary { width: auto; margin-left: auto; }
+.tut-final { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
+.tut-final .btn { flex: 1; }
+.tut-count { font-size: .7rem; color: var(--muted); font-weight: 600; }
+.tut-exit {
+  background: none; border: none; cursor: pointer; padding: 4px 0;
+  font-family: var(--font-body); font-size: .76rem; color: var(--muted); text-decoration: underline;
+}
+.tut-exit:hover { color: var(--ink2); }
+.tut-hint {
+  display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #fff8e0; border: 1.5px solid #e8c878; border-radius: var(--radius-md);
+  padding: 12px 14px; font-size: .85rem; color: var(--ink2); box-shadow: var(--shadow-card);
+}
+.tut-hint.show { display: flex; }
+.tut-hint-text { flex: 1; min-width: 180px; line-height: 1.45; }
+.tut-hint .btn-primary { width: auto; }
 </style>
 </head>
 <body>
@@ -1105,6 +1172,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 <!-- NAME -->
 <div class="screen active" id="screen-name">
   <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+    <div class="tut-hint" data-tut-hint></div>
     <div class="card-box" style="text-align:center">
       <div class="game-logo">Capi<span>varas</span></div>
       <div class="game-tagline">Um jogo de apostas secretas</div>
@@ -1112,6 +1180,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <h2 style="text-align:left">Como te chamas?</h2>
       <input type="text" id="inp-name" placeholder="O teu nome..." maxlength="20" autocomplete="off">
       <button class="btn btn-primary" id="btn-go">Entrar no jogo</button>
+      <button class="btn btn-outline" id="btn-tut-name" style="width:100%;margin-top:10px">🎓 Tutorial</button>
     </div>
     <div class="video-wrap" id="video-wrap" onclick="playRulesVideo()">
       <video id="rules-video" preload="none" controls style="display:none"></video>
@@ -1128,10 +1197,12 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
     <div style="text-align:center;margin-bottom:24px">
       <div class="game-logo" style="font-size:2.2rem">Capi<span>varas</span></div>
     </div>
+    <div class="tut-hint" data-tut-hint style="margin-bottom:16px"></div>
     <h2>Escolhe uma mesa</h2>
     <div class="lobby-grid" id="lobby-list"></div>
-    <div style="margin-top:18px">
+    <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" id="btn-back-name">← Mudar nome</button>
+      <button class="btn btn-outline btn-sm" id="btn-tut-lobby">🎓 Tutorial</button>
     </div>
   </div>
 </div>
@@ -1148,7 +1219,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <button class="btn btn-primary" id="btn-start" disabled>Iniciar Jogo</button>
     </div>
     <div id="wait-guest-msg" style="display:none;color:var(--muted);font-size:.88rem;text-align:center;padding:8px 0">
-      Aguarda que o anfitriao inicie o jogo...
+      Aguarda que o anfitrião inicie o jogo...
     </div>
     <div style="margin-top:16px">
       <button class="btn btn-outline btn-sm" id="btn-leave-wait">← Sair da mesa</button>
@@ -1160,7 +1231,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 <div class="screen" id="screen-game">
   <div class="game-header">
     <div class="header-left">
-      <div class="bird-token" id="bird-token-display">Passaro — sem detentor</div>
+      <div class="bird-token" id="bird-token-display">Pássaro — sem detentor</div>
       <div class="deck-info" id="deck-info">—</div>
     </div>
     <audio id="ambient-audio" src="/ambient.mp3" loop preload="auto"></audio>
@@ -1197,15 +1268,16 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <h3>O Pantanal acorda...</h3>
       <p>No coração húmido do Pantanal, uma colónia de capivaras relaxa ao sol. Chegaram os humanos — cada um quer dar festinhas nas suas favoritas. Mas as capivaras são tímidas: se dois humanos se aproximarem ao mesmo tempo, fogem imediatamente. Só o jogador que chegar <em>sozinho</em> ganha a sua capivara.</p>
 
-      <h3>O teu turno</h3>
-      <p>A cada ronda, são colocadas na mesa tantas cartas quantos os jogadores. Em segredo, cada um coloca uma ficha virada para baixo com o número da carta que quer conquistar. Quando todos estiverem prontos, revelam ao mesmo tempo.</p>
+      <h3>Cada ronda</h3>
+      <p>A cada ronda, são colocadas na mesa tantas cartas quantos os jogadores, identificadas pelas letras A, B, C… Em segredo, cada um escolhe a carta que quer conquistar. Não há turnos: quando todos tiverem apostado, as apostas revelam-se ao mesmo tempo.</p>
       <ul>
         <li><span class="rule-tag green">Sozinho</span> Foste o único a escolher essa carta? É tua!</li>
-        <li><span class="rule-tag">Empate</span> Mais de um jogador escolheu a mesma carta? Ninguém ganha — as capivaras fugiram.</li>
+        <li><span class="rule-tag">Empate</span> Mais de um jogador escolheu a mesma carta? Ninguém a ganha — as capivaras fugiram e a carta vai para o descarte.</li>
+        <li><span class="rule-tag blue">Sem apostas</span> Ninguém escolheu uma carta? Também vai para o descarte.</li>
       </ul>
 
       <h3>O pássaro amarelo</h3>
-      <p>Algumas cartas têm um pássaro amarelo. Quem recolher a primeira dessas cartas fica com o <strong>token do pássaro</strong> (vale +5 pontos no fim). Para roubar o token, tens de acumular <em>mais</em> cartas com pássaro do que o detentor atual. Em caso de empate, o token não se move.</p>
+      <p>Algumas cartas têm um pássaro amarelo. Quem recolher a primeira dessas cartas fica com o <strong>token do pássaro</strong> (vale +5 pontos no fim). Para roubar o token, tens de acumular <em>mais</em> cartas com pássaro do que o detentor atual (pelo menos mais uma). Em caso de empate, o token não se move. Se dois jogadores apanharem a primeira carta com pássaro na mesma ronda, o token fica na mesa até alguém ter mais cartas com pássaro do que eles.</p>
 
       <h3>Os nenúfares</h3>
       <p>Certas cartas têm nenúfares coloridos. Coleciona as quatro cores para ganhar <strong>+10 pontos bónus</strong> no final.</p>
@@ -1217,7 +1289,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       </ul>
 
       <h3>O baralho</h3>
-      <p>O baralho de 36 cartas é jogado duas vezes. Quando acaba pela primeira vez, baralha-se o descarte e continua. Quando acaba pela segunda vez, o jogo termina e contam-se os pontos.</p>
+      <p>O baralho de 36 cartas é jogado duas vezes. Quando acaba pela primeira vez, baralha-se o descarte (as cartas que ninguém ganhou) e continua — as cartas ganhas ficam com quem as ganhou e não voltam ao jogo. Quando acaba pela segunda vez, o jogo termina e contam-se os pontos.</p>
 
       <h3>Pontuação final</h3>
       <ul>
@@ -1241,6 +1313,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   </div>
 </div>
 
+<!-- TUTORIAL (tour guiado) -->
+<div class="tut-spot" id="tut-spot"></div>
+<div class="tut-coach" id="tut-coach" role="dialog" aria-live="polite"></div>
+
 <script>
 let ws,myName='',myToken='',myLobbySeat=-1,myLobbyId='',isSolo=false;
 let state=null,myGameSeat=-1,isHost=false,waitLobby=null;
@@ -1254,7 +1330,8 @@ const LC = { Y:'#e8a820', R:'#d85030', W:'#8898a8', B:'#4898c8' };
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
 function openOverlay(id){ document.getElementById(id).classList.add('active'); }
 function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
-function send(msg){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(msg)); }
+// Durante o tutorial, as ações de jogo vão para o handler local (tutHandle) — só o PING segue para o servidor.
+function send(msg){ if(tut.active&&msg.type!=='PING'){ tutHandle(msg); return; } if(ws&&ws.readyState===1) ws.send(JSON.stringify(msg)); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 let _nt;
 function notif(t,d=3200){ const e=document.getElementById('notif'); e.textContent=t; e.classList.add('show'); clearTimeout(_nt); _nt=setTimeout(()=>e.classList.remove('show'),d); }
@@ -1369,9 +1446,14 @@ document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==
 setInterval(()=>send({type:'PING'}),15000);
 
 function handleMsg(msg){
+  // Tutorial ativo: nada do servidor pode mudar de ecrã — só guardamos a lista de mesas para depois.
+  if(tut.active){ if(msg.type==='LOBBIES') _cachedLobbies=msg.lobbies; return; }
   switch(msg.type){
     case 'PONG': break;
-    case 'LOBBIES': renderLobbyList(msg.lobbies); break;
+    case 'LOBBIES':
+      renderLobbyList(msg.lobbies);
+      if(_joinSoloOnConnect){ _joinSoloOnConnect=false; send({type:'JOIN_LOBBY',lobbyId:'solo',playerName:myName}); }
+      break;
     case 'JOINED':
       myToken=msg.token; myLobbySeat=msg.seat; myLobbyId=msg.lobbyId;
       isSolo=msg.solo; isHost=msg.seat===0; myGameSeat=msg.seat;
@@ -1428,7 +1510,7 @@ function renderWaitRoom(msg){
   (lobby.names||[]).forEach((name,i)=>{
     if(!name) return;
     const d=document.createElement('div'); d.className='wait-player'+(i===myLobbySeat?' me':'');
-    d.textContent=name+(i===0?' (anfitriao)':'')+(i===myLobbySeat?' — tu':''); pp.appendChild(d);
+    d.textContent=name+(i===0?' (anfitrião)':'')+(i===myLobbySeat?' — tu':''); pp.appendChild(d);
   });
   const seated=(lobby.names||[]).filter(Boolean).length;
   if(isHost){
@@ -1464,9 +1546,9 @@ function renderGame(){
 
     const lilDiv=document.createElement('div'); lilDiv.className='plilies';
     if(p.lilies.length===0){ const dash=document.createElement('span'); dash.style.opacity='.35'; dash.textContent='—'; lilDiv.appendChild(dash); }
-    else p.lilies.forEach(l=>{ const s=document.createElement('span'); s.style.cssText='color:'+LC[l]+';font-size:.9em'; s.title='Nenufar '+LL[l]; s.textContent='●'; lilDiv.appendChild(s); });
+    else p.lilies.forEach(l=>{ const s=document.createElement('span'); s.style.cssText='color:'+LC[l]+';font-size:.9em'; s.title='Nenúfar '+LL[l]; s.textContent='●'; lilDiv.appendChild(s); });
     if(p.birdCards>0){
-      const bc=document.createElement('span'); bc.className='bird-count'; bc.title='Cartas com passaro';
+      const bc=document.createElement('span'); bc.className='bird-count'; bc.title='Cartas com pássaro';
       const bimg=document.createElement('img'); bimg.src='/bird.png'; bimg.className='bird-pip'; bimg.alt='';
       bc.appendChild(bimg); bc.appendChild(document.createTextNode(p.birdCards));
       lilDiv.appendChild(bc);
@@ -1491,11 +1573,11 @@ function renderGame(){
       if(w&&w[pos]!==undefined){
         cls+=' won';
         extra='<div class="card-result-label win">'+esc(state.players[w[pos]].name)+'</div>';
-      } else { cls+=' nobody'; extra='<div class="card-result-label nobody">Ninguem</div>'; }
+      } else { cls+=' nobody'; extra='<div class="card-result-label nobody">Ninguém</div>'; }
     } else if(state.phase==='BETTING'&&state.myBet===pos){ cls+=' selected'; }
 
     const lilyB=card.lilies.map(l=>'<span class="lily '+LI[l]+'">'+LL[l]+'</span>').join('');
-    const birdB=card.bird?'<span class="lily lily-bird">Passaro</span>':'';
+    const birdB=card.bird?'<span class="lily lily-bird">Pássaro</span>':'';
     const capWord=card.cap===1?'capivara':'capivaras';
 
     div.className=cls;
@@ -1522,10 +1604,10 @@ function renderGame(){
     cnt.textContent=placed+'/'+state.n+' apostas';
     text.textContent=state.myBet===null?'Escolhe uma carta para apostar':'Apostaste na carta '+String.fromCharCode(64+state.myBet+1)+' — a aguardar os outros...';
   } else if(state.phase==='REVEAL'){
-    badge.textContent='Revelacao'; cnt.textContent='';
+    badge.textContent='Revelação'; cnt.textContent='';
     const bu=state.lastResult&&state.lastResult.birdUpdate;
-    if(bu){if(bu.type==='first')text.textContent=bu.name+' recebeu o token do pássaro!';else if(bu.type==='steal')text.textContent=bu.name+' destronou '+bu.fromName+' e ficou com o token!';else if(bu.type==='tie_first')text.textContent='Empate! Ninguém ficou com o token do pássaro.';else if(bu.type==='tie_steal')text.textContent='Empate! O token do pássaro mantém-se com o detentor atual.';}
-    else { const w=Object.keys((state.lastResult&&state.lastResult.winners)||{}).length; text.textContent=w>0?w+' carta'+(w!==1?'s':'')+' recolhida'+(w!==1?'s':'')+'!':'Ninguem ganhou — todos empataram!'; }
+    if(bu){if(bu.type==='first')text.textContent=bu.name+' recebeu o token do pássaro!';else if(bu.type==='steal')text.textContent=bu.name+' destronou '+bu.fromName+' e ficou com o token!';else if(bu.type==='tie_first')text.textContent='Empate! O token do pássaro fica na mesa.';else if(bu.type==='tie_steal')text.textContent='Empate! O token do pássaro mantém-se com o detentor atual.';}
+    else { const w=Object.keys((state.lastResult&&state.lastResult.winners)||{}).length; text.textContent=w>0?w+' carta'+(w!==1?'s':'')+' recolhida'+(w!==1?'s':'')+'!':'Ninguém ganhou — todos empataram!'; }
   } else { badge.textContent='Fim do Jogo'; text.textContent='A contabilizar pontos...'; cnt.textContent=''; }
 
   /* my scored */
@@ -1549,7 +1631,7 @@ function renderGame(){
     if(mc.lilies.length||mc.bird){
       const badges=document.createElement('div'); badges.className='mini-card-badges';
       mc.lilies.forEach(l=>{ const s=document.createElement('span'); s.className='mini-lily lily-'+l; s.textContent=LL[l]; badges.appendChild(s); });
-      if(mc.bird){ const b=document.createElement('span'); b.className='mini-lily lily-bird'; b.textContent='Passaro'; badges.appendChild(b); }
+      if(mc.bird){ const b=document.createElement('span'); b.className='mini-lily lily-bird'; b.textContent='Pássaro'; badges.appendChild(b); }
       lbl.appendChild(badges);
     }
     wrap.appendChild(lbl);
@@ -1558,12 +1640,12 @@ function renderGame(){
 
   /* bird token */
   const bt=document.getElementById('bird-token-display');
-  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> Passaro — sem detentor'; bt.className='bird-token'; }
+  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> Pássaro — sem detentor'; bt.className='bird-token'; }
   else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
 
   /* deck */
   document.getElementById('deck-info').textContent=
-    state.deckPass===0?'1.a passagem — '+state.deckLeft+' cartas':'2.a passagem — '+state.deckLeft+' cartas';
+    state.deckPass===0?'1.ª passagem — '+state.deckLeft+' cartas':'2.ª passagem — '+state.deckLeft+' cartas';
 }
 
 function showGameOver(){
@@ -1571,14 +1653,14 @@ function showGameOver(){
   (state.finalScores||state.players).forEach((s,i)=>{
     const isW=i===state.winnerIdx;
     const d=[];
-    if(s.birdCards>0) d.push('Passaro x'+s.birdCards);
+    if(s.birdCards>0) d.push('Pássaro ×'+s.birdCards);
     if(s.hasBird) d.push('+5 token');
-    if(s.allLilies) d.push('+10 quatro nenufares!');
+    if(s.allLilies) d.push('+10 quatro nenúfares!');
     const row=document.createElement('div'); row.className='score-row';
     row.innerHTML=
       '<div>'+
         '<div class="score-name">'+esc(s.name)+(isW?' <span class="winner-badge">Vencedor</span>':'')+'</div>'+
-        '<div class="score-detail">'+(d.join(' · ')||'so capivaras')+'</div>'+
+        '<div class="score-detail">'+(d.join(' · ')||'só capivaras')+'</div>'+
       '</div>'+
       '<div class="score-pts">'+s.pts+' pts</div>';
     el.appendChild(row);
@@ -1586,6 +1668,406 @@ function showGameOver(){
   document.getElementById('btn-restart').style.display=(isSolo||isHost)?'inline-flex':'none';
   openOverlay('overlay-gameover');
 }
+
+// ── TUTORIAL (tour guiado) ───────────────────────────────────────────────────
+// Corre 100% no cliente, sem servidor nem mesas reais: o estado fictício é
+// construído com as MESMAS funções do motor (computeScores/buildView/resolveBets, injetadas
+// abaixo a partir do servidor) e desenhado pelo renderGame() real. Enquanto
+// está ativo, send() desvia as ações para tutHandle() e handleMsg() ignora o
+// servidor. Os bots jogam de forma roteirizada (tutBotChoice).
+${computeScores.toString()}
+${buildView.toString()}
+${resolveBets.toString()}
+
+const TUT_DONE_KEY='cap_tut_done', TUT_HINT_KEY='cap_tut_hint_off';
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+const tut={ active:false, step:0, from:'screen-name', g:null, saved:null, timers:[], tick:null, thinking:false };
+let _joinSoloOnConnect=false;
+
+// Mesma forma que mkCard() no servidor.
+function tutCard(cap,lilies,bird){
+  const l=[...lilies].sort().join('');
+  return { cap, lilies, bird, img:'cap'+cap+(l?'_'+l:'')+(bird?'_bird':''), fallback:'cap'+cap };
+}
+// Ronda 1: três valores diferentes (4, 2+pássaro, 3) — os bots vão os dois à
+// carta mais valiosa que tu não escolheste, por isso tu ganhas sempre a tua e
+// eles chocam (mostra "sozinho" e "empate" na mesma ronda).
+// Ronda 2: Bot 1 → A (pássaro), Bot 2 → C (nenúfar Branco); B fica livre.
+const TUT_TABLES=[
+  [tutCard(4,[],false), tutCard(2,['Y'],true), tutCard(3,['B'],false)],
+  [tutCard(3,[],true),  tutCard(1,['R'],false), tutCard(2,['W'],false)],
+];
+// "Resto do jogo" imaginado para o ecrã final (sem pássaros, para não mexer no token).
+const TUT_EXTRA=[
+  [tutCard(1,['B','W'],false), tutCard(2,['Y'],false), tutCard(1,['R'],false), tutCard(3,[],false), tutCard(5,[],false)],
+  [tutCard(4,[],false), tutCard(3,[],false), tutCard(2,[],false), tutCard(3,['Y'],false)],
+  [tutCard(2,[],false), tutCard(3,['B'],false), tutCard(4,[],false), tutCard(1,[],false)],
+];
+function tutClone(c){ return { ...c, lilies:[...c.lilies] }; }
+
+// Espelho de newGame() para a Mesa Solo (3 jogadores, 36 cartas).
+function tutNewGame(name){
+  return {
+    players: [name,'Bot Capivaras 1','Bot Capivaras 2'].map(n=>({ name:n, scored:[], birdCards:0 })),
+    n:3, deck:new Array(33).fill(null), discard:[], table:TUT_TABLES[0].map(tutClone),
+    bets:[null,null,null], birdHolder:null, birdTie:0,
+    phase:'BETTING', deckPass:0, lastResult:null,
+    isSolo:true, turnGen:0, winnerIdx:null, finalScores:null, round:0,
+  };
+}
+
+// A resolução é a do próprio motor (resolveBets, injetada acima).
+function tutResolve(){ resolveBets(tut.g); tutRender(); }
+
+// Espelho de nextRound().
+function tutNextRound(){
+  const g=tut.g;
+  g.deck.splice(0,g.n); g.table=TUT_TABLES[1].map(tutClone); g.bets=new Array(g.n).fill(null);
+  g.lastResult=null; g.phase='BETTING'; g.turnGen++; g.round=1;
+  tutRender();
+}
+
+// Salta para o fim: junta o "resto do jogo" e aplica endGame().
+function tutGameOver(){
+  const g=tut.g; if(g.phase==='GAME_OVER') return;
+  g.players.forEach((p,i)=>TUT_EXTRA[i].forEach(c=>p.scored.push(tutClone(c))));
+  g.deck=[]; g.deckPass=1; g.phase='GAME_OVER'; g.finalScores=computeScores(g);
+  const maxPts=Math.max(...g.finalScores.map(s=>s.pts));
+  g.winnerIdx=g.finalScores.findIndex(s=>s.pts===maxPts);
+  tutRender(); showGameOver();
+}
+
+// Mesmo tratamento que um GAME_STATE vindo do servidor (sons incluídos).
+function tutRender(){
+  state=buildView(tut.g,0);
+  checkNewBets(state.betsPlaced); checkBirdChange(state.birdHolder);
+  renderGame();
+}
+
+function tutBotChoice(seat){
+  const g=tut.g;
+  if(g.round===0){
+    let best=-1;
+    g.table.forEach((c,p)=>{ if(p!==g.bets[0]&&(best<0||c.cap>g.table[best].cap)) best=p; });
+    return best;
+  }
+  return seat===1?0:2;
+}
+
+function tutLater(fn,ms){ tut.timers.push(setTimeout(fn,ms)); }
+function tutBotTurn(seat){
+  const g=tut.g;
+  if(g.bets[seat]!==null){ tut.thinking=false; return; }
+  tut.thinking=true;
+  tutLater(()=>{ tut.thinking=false; g.bets[seat]=tutBotChoice(seat); tutRender(); tutRenderCoach(); }, 1500);
+}
+
+// ── Handler local das ações (substitui o servidor) ──
+function tutHandle(msg){
+  if(msg.type==='BET') tutBet(parseInt(msg.position));
+  // "Sair" do jogo / "Voltar ao Lobby": o handler original ainda corre depois
+  // deste send(), por isso saímos no próximo tick para repor o ecrã de origem.
+  else if(msg.type==='LEAVE_LOBBY') setTimeout(()=>tutExit(),0);
+}
+function tutBet(pos){
+  const g=tut.g;
+  if(!g||g.phase!=='BETTING'||g.bets[0]!==null||isNaN(pos)||pos<0||pos>=g.n) return;
+  g.bets[0]=pos; tutRender();
+  const betStep=tutIdx(g.round===0?'aposta1':'aposta2');
+  // Adiantou-se na ronda 1 → salta para a vez dos bots; na ronda 2 o passo da aposta é saltado mais tarde.
+  if(g.round===0&&tut.step<=betStep) tutGo(betStep+1);
+  else if(tut.step===betStep) tutNext();
+  else tutRenderCoach();
+}
+function tutShortcut(pos){ playDuck(); send({type:'BET',position:pos}); }
+
+// ── Textos ──
+function tutLetter(pos){ return String.fromCharCode(65+pos); }
+function tutWho(seat){ return seat===0?'Tu':esc(tut.g.players[seat].name); }
+function tutCapWord(n){ return n+' '+(n===1?'capivara':'capivaras'); }
+
+function tutBotText(seat){
+  const g=tut.g, nm='<b>'+esc(g.players[seat].name)+'</b>';
+  const pre=(g.round===1&&seat===1)?'<b>Ronda 2</b> — cartas novas na mesa, e desta vez os bots vão primeiro. ':'';
+  if(tut.thinking) return pre+nm+' está a decidir. Repara no painel dele, destacado: diz “A pensar...”.';
+  const placed=g.bets.filter(b=>b!==null).length;
+  return pre+nm+' apostou! O painel passou a “Apostou” e o contador está em <b>'+placed+'/3 apostas</b>. '+
+    'Em que carta? Segredo — só se sabe quando todos tiverem apostado.'+
+    (placed===3?' Já estão as 3 apostas: vamos à revelação!':'');
+}
+
+function tutRevealText(){
+  const g=tut.g, r=g.lastResult; if(!r) return '';
+  const lines=r.cards.map((c,pos)=>{
+    const who=[0,1,2].filter(s=>r.bets[s]===pos);
+    const cn='<b>'+tutLetter(pos)+'</b> ('+tutCapWord(c.cap)+')';
+    if(who.length===1) return who[0]===0?'✅ Ficaste sozinho na carta '+cn+' — <b>é tua!</b>':'✅ '+tutWho(who[0])+' ficou sozinho na carta '+cn+' e ganhou-a.';
+    if(who.length>1) return '💨 Carta '+cn+': '+who.map(tutWho).join(' e ')+' escolheram-na — as capivaras fugiram, <b>ninguém</b> a ganha e vai para o descarte.';
+    return '▫️ Ninguém apostou na carta '+cn+' — vai para o descarte.';
+  });
+  const bu=r.birdUpdate;
+  if(bu){
+    if(bu.type==='first') lines.push('🐦 '+(bu.seat===0?'Foste o primeiro':esc(bu.name)+' foi o primeiro')+' a apanhar uma carta com pássaro: '+(bu.seat===0?'ficas':'fica')+' com o <b>token do pássaro</b> (+5).');
+    else if(bu.type==='steal') lines.push('🐦 '+tutWho(bu.seat)+' passou a ter mais cartas com pássaro e roubou o token!');
+    else if(bu.type==='tie_first') lines.push('🐦 Empate nas cartas com pássaro — o token fica na mesa até alguém ter mais cartas com pássaro do que '+bu.seats.map(x=>x===0?'tu':tutWho(x)).join(' e ')+'.');
+    else lines.push('🐦 Empate entre os jogadores que passaram o detentor — o token não se mexe.');
+  }
+  let why;
+  if(g.round===0) why='🤖 Os dois bots foram atrás da carta mais valiosa que sobrava. Pensaram o mesmo… e chocaram. A carta óbvia é arriscada!';
+  else if(r.bets[0]===0||r.bets[0]===2) why='🤖 Bot 1 queria o pássaro (A) e Bot 2 o nenúfar Branco (C). Escolheste a mesma carta que um deles — por isso ninguém a levou.';
+  else why='🤖 Bot 1 foi ao pássaro (A) e Bot 2 ao nenúfar Branco (C). Ficaste com a carta que ninguém quis: às vezes a carta pequena é a jogada certa.';
+  return '<div class="tut-lines">'+lines.map(l=>'<div>'+l+'</div>').join('')+'<div>'+why+'</div></div>';
+}
+
+function tutPointsText(){
+  const me=state.players[0];
+  return 'As cartas ganhas vão para <b>as tuas capivaras</b> (em baixo) e os pontos dos painéis atualizam logo: tens agora <b>'+me.pts+' pts</b>. '+
+    'Cada capivara na carta vale 1 ponto.'+(me.hasBird?' Esse total já inclui os <b>+5</b> do token do pássaro.':'')+
+    ' Os bots não ganharam nada nesta ronda.';
+}
+
+function tutBirdText(){
+  const g=tut.g, h=g.birdHolder;
+  let t;
+  if(h===null) t='Ainda ninguém tem o <b>token do pássaro</b>. Fica com ele o primeiro jogador a ganhar sozinho uma carta com pássaro (se dois o conseguirem na mesma ronda, fica na mesa até um jogador ter mais cartas com pássaro do que eles).';
+  else {
+    const k=g.players[h].birdCards;
+    t=(h===0?'<b>Tens</b>':'<b>'+esc(g.players[h].name)+'</b> tem')+' o token do pássaro, com '+k+' carta'+(k!==1?'s':'')+' com pássaro. Vale <b>+5 pontos</b>.';
+    const eq=[0,1,2].filter(i=>i!==h&&g.players[i].birdCards===k);
+    if(eq.length) t+=' Repara: '+(eq.length===1&&eq[0]===0?'tu também tens':eq.map(tutWho).join(' e ')+' também '+(eq.length>1?'têm':'tem'))+' '+k+' — empatar não chega, por isso o token não saiu do sítio.';
+  }
+  return t+' Para <b>roubar</b> o token é preciso ter <b>mais</b> cartas com pássaro do que o detentor atual.';
+}
+
+function tutFinalText(){
+  const g=tut.g, me=g.finalScores[0];
+  const caps=me.scored.reduce((a,c)=>a+c.cap,0);
+  let t='Imaginámos o resto do jogo (juntámos algumas cartas a cada um). A tua conta: <b>'+caps+'</b> das capivaras';
+  if(me.allLilies) t+=' + <b>10</b> das 4 cores de nenúfar';
+  if(me.hasBird) t+=' + <b>5</b> do token do pássaro';
+  t+=' = <b>'+me.pts+' pts</b>. ';
+  t+=g.winnerIdx===0?'Ganhaste! 🎉':esc(g.finalScores[g.winnerIdx].name)+' ganhou.';
+  return t+' Se houver empate no topo, ganha o primeiro jogador da lista com essa pontuação.';
+}
+
+// ── Passos ──
+// mode: 'next' (botão Seguinte), 'bet' (espera pela aposta real), 'bot' (bot joga
+// com atraso), 'final'. queue: fila de chips com a ordem da ronda.
+const TUT_Q1=[0,1,2], TUT_Q2=[1,2,0];
+const TUT_STEPS=[
+  { id:'bemvindo', title:'Bem-vindo ao Capivaras! 🐹',
+    text:'A ideia em 10 segundos: em cada ronda há na mesa <b>tantas cartas quantos jogadores</b>. Todos escolhem <b>uma carta em segredo</b> e as apostas revelam-se ao mesmo tempo.<ul><li><b>Sozinho</b> numa carta? É tua.</li><li><b>Com mais alguém?</b> As capivaras fogem e ninguém a ganha.</li></ul>Vamos jogar duas rondas de treino contra dois bots. Nada disto conta.' },
+  { id:'entrar', title:'Como se entra num jogo',
+    text:'No ecrã inicial escreves o teu nome e escolhes uma mesa no lobby: <b>Mesa 1 a 5</b> para jogar com amigos (2 a 6 jogadores; o anfitrião carrega em “Iniciar Jogo”) ou <b>Mesa Solo</b>, contra 2 IAs, que começa logo. Este treino imita a Mesa Solo.' },
+  { id:'jogadores', title:'Os jogadores', target:['#players-bar'],
+    text:'Aqui estás tu (contorno laranja) e os adversários. Cada painel mostra os <b>pontos</b>, as <b>cores de nenúfar</b> já apanhadas, as <b>cartas com pássaro</b> e se já apostou (“A pensar...” ou “Apostou”).' },
+  { id:'topo', title:'Pássaro e baralho', target:['#bird-token-display','#deck-info'],
+    text:'Aqui vês quem tem o <b>token do pássaro</b> (+5 pontos) e, no computador, quantas cartas restam no baralho.' },
+  { id:'mesa', title:'A mesa', target:['#table-cards .cap-card'],
+    text:'Cada ronda traz <b>3 cartas</b> — uma por jogador — marcadas A, B e C. O número de capivaras é o que a carta vale em pontos. Algumas têm <b>nenúfares</b> coloridos, outras um <b>pássaro</b> amarelo.' },
+  { id:'estado', title:'A barra de estado', target:['.status-bar'],
+    text:'Diz a fase (<b>A Apostar</b> ou <b>Revelação</b>), o que tens de fazer e quantas apostas já foram feitas.' },
+  { id:'minhas', title:'As tuas capivaras', target:['.my-area'],
+    text:'As cartas que ganhas ficam aqui. É desta fila que saem os teus pontos e as tuas cores de nenúfar.' },
+  { id:'regras', title:'Regras sempre à mão', target:['.rules-panel'],
+    text:'Durante o jogo podes abrir este painel para rever as regras sempre que quiseres.' },
+  { id:'ordem1', title:'Quem joga quando?', target:['#players-bar'], queue:{ order:TUT_Q1, fresh:true },
+    text:'No Capivaras <b>não há turnos</b>: todos apostam ao mesmo tempo, em segredo, e a ronda só se resolve quando toda a gente apostou. Neste treino vamos <b>um de cada vez</b> para veres cada passo — primeiro tu, depois cada bot:' },
+  { id:'aposta1', mode:'bet', title:'A tua aposta', target:['#table-cards .cap-card'], queue:{ order:TUT_Q1 },
+    text:'Toca numa carta para apostar nela (ou usa os atalhos aqui em baixo). A aposta é <b>imediata</b> e não dá para voltar atrás.' },
+  { id:'bot1r1', mode:'bot', seat:1, title:'Vez do Bot Capivaras 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q1 },
+    onEnter:()=>tutBotTurn(1), text:()=>tutBotText(1) },
+  { id:'bot2r1', mode:'bot', seat:2, title:'Vez do Bot Capivaras 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q1 },
+    onEnter:()=>tutBotTurn(2), text:()=>tutBotText(2) },
+  { id:'revela1', title:'Revelação!', target:['#table-cards .cap-card'],
+    onEnter:()=>{ if(tut.g.phase==='BETTING') tutResolve(); }, text:()=>tutRevealText() },
+  { id:'pontos1', title:'Pontos ganhos', target:['#players-bar','.my-area'], text:()=>tutPointsText() },
+  { id:'ordem2', title:'E a ronda seguinte?', target:['#players-bar'], queue:{ order:TUT_Q2, fresh:true },
+    text:'Depois da revelação há uma pausa de uns segundos e a ronda seguinte começa sozinha. Ninguém passa a ser “primeiro jogador” — como ninguém vê as apostas dos outros, apostar mais cedo ou mais tarde <b>não dá vantagem</b>. Para o provar, na ronda 2 os bots apostam primeiro:' },
+  { id:'bot1r2', mode:'bot', seat:1, title:'Vez do Bot Capivaras 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q2 },
+    onEnter:()=>{ if(tut.g.round===0) tutNextRound(); tutBotTurn(1); }, text:()=>tutBotText(1) },
+  { id:'bot2r2', mode:'bot', seat:2, title:'Vez do Bot Capivaras 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q2 },
+    onEnter:()=>tutBotTurn(2), text:()=>tutBotText(2) },
+  { id:'aposta2', mode:'bet', title:'A tua vez (ronda 2)', target:['#table-cards .cap-card'], queue:{ order:TUT_Q2 },
+    skip:()=>tut.g.bets[0]!==null,
+    text:'Os dois bots já apostaram — vês “Apostou” nos painéis, mas não em que carta. É exatamente assim num jogo a sério. Qual escolhes?' },
+  { id:'revela2', title:'Revelação da ronda 2', target:['#table-cards .cap-card'],
+    onEnter:()=>{ if(tut.g.phase==='BETTING') tutResolve(); }, text:()=>tutRevealText() },
+  { id:'passaro', title:'O token do pássaro', target:['#bird-token-display','#players-bar'], text:()=>tutBirdText() },
+  { id:'nenufares', title:'Os nenúfares', target:['#players-bar','.my-area'],
+    text:'Há nenúfares de quatro cores: <b>Amarelo, Vermelho, Branco e Azul</b>. Junta as quatro nas cartas que ganhas (podem estar em cartas diferentes) e ganhas <b>+10 pontos</b>. As bolinhas coloridas nos painéis mostram as cores que cada um já tem.' },
+  { id:'fim', title:'Quando acaba o jogo?', target:['.game-header'], next:'Ver o fim do jogo',
+    text:'O baralho tem 36 cartas e joga-se <b>duas vezes</b>: quando acaba, as cartas que ninguém ganhou são baralhadas e voltam (as que foram ganhas ficam com os donos); quando acaba pela segunda vez, o jogo termina e contam-se os pontos. Vamos saltar para o fim de um jogo imaginário.' },
+  { id:'pontuacao', title:'Pontuação final', target:['#final-scores'],
+    onEnter:()=>tutGameOver(), text:()=>tutFinalText() },
+  { id:'dicas', mode:'final', title:'Pronto para jogar! 🎓',
+    onEnter:()=>{ lsSet(TUT_DONE_KEY,'1'); updateTutHints(); },
+    text:'Algumas dicas:<ul><li>Vê que cores de nenúfar te faltam — uma carta pequena pode valer +10.</li><li>A carta mais valiosa é a mais óbvia: se todos a quiserem, ninguém a leva.</li><li>Conta as cartas com pássaro de cada um antes de tentar roubar o token.</li></ul>' },
+];
+function tutIdx(id){ return TUT_STEPS.findIndex(s=>s.id===id); }
+
+// ── Motor do tour ──
+function tutTargets(){
+  const s=TUT_STEPS[tut.step]; if(!s||!s.target) return [];
+  return s.target.flatMap(sel=>[...document.querySelectorAll(sel)]).filter(el=>{
+    const r=el.getBoundingClientRect(); return r.width>0&&r.height>0;
+  });
+}
+
+function tutQueueHTML(q){
+  const g=tut.g, cur=!q.fresh&&g.phase==='BETTING';
+  const now=cur?q.order.find(s=>g.bets[s]===null):undefined;
+  return '<div class="tut-queue">'+q.order.map((s,i)=>{
+    const done=cur&&g.bets[s]!==null;
+    return (i?'<span class="tut-qarrow">→</span>':'')+
+      '<span class="tut-qchip'+(s===now?' now':'')+(done?' done':'')+'">'+(done?'✓ ':'')+tutWho(s)+'</span>';
+  }).join('')+'</div>';
+}
+
+function tutRenderCoach(){
+  const c=document.getElementById('tut-coach'), s=TUT_STEPS[tut.step], g=tut.g;
+  let h='<div class="tut-title">'+s.title+'</div><div class="tut-text">'+(typeof s.text==='function'?s.text():s.text)+'</div>';
+  if(s.queue) h+=tutQueueHTML(s.queue);
+  if(s.mode==='bot'&&tut.thinking) h+='<div class="tut-thinking">⏳ a pensar…</div>';
+  // Atalho no próprio balão: em ecrãs pequenos o balão pode tapar as cartas.
+  if(s.mode==='bet'&&g.phase==='BETTING'&&g.bets[0]===null)
+    h+='<div class="tut-shortcuts">'+g.table.map((cd,p)=>'<button class="btn btn-outline btn-sm" onclick="tutShortcut('+p+')">'+tutLetter(p)+' · '+cd.cap+' cap.</button>').join('')+'</div>';
+  h+='<div class="tut-progress"><div style="width:'+Math.round((tut.step+1)/TUT_STEPS.length*100)+'%"></div></div>';
+  h+='<div class="tut-actions">';
+  if(s.mode==='final'){
+    h+='<div class="tut-final"><button class="btn btn-primary btn-sm" onclick="tutPlayForReal()">Jogar contra a IA</button>'+
+       '<button class="btn btn-outline btn-sm" onclick="tutExit(myName?&quot;screen-lobby&quot;:&quot;screen-name&quot;)">'+(myName?'Voltar ao lobby':'Voltar ao início')+'</button></div>';
+  } else {
+    h+='<button class="tut-exit" onclick="tutExit()">Sair do tutorial</button><span class="tut-count">'+(tut.step+1)+'/'+TUT_STEPS.length+'</span>';
+    if(s.mode!=='bet') h+='<button class="btn btn-primary btn-sm" onclick="tutNext()"'+(s.mode==='bot'&&tut.thinking?' disabled':'')+'>'+(s.next||'Seguinte')+' →</button>';
+  }
+  c.innerHTML=h+'</div>';
+  tutPlace();
+}
+
+// Spotlight + posição do balão (por baixo ou por cima do alvo; centrado se não houver).
+function tutPlace(){
+  if(!tut.active) return;
+  const vw=window.innerWidth, vh=window.innerHeight, pad=6, m=12;
+  const rects=tutTargets().map(el=>{ const r=el.getBoundingClientRect(); return { x:r.left-pad, y:r.top-pad, w:r.width+pad*2, h:r.height+pad*2 }; });
+  const holes=rects.map(r=>'<rect x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'" rx="14" fill="black"/>').join('');
+  document.getElementById('tut-spot').innerHTML=
+    '<svg><defs><mask id="tut-mask"><rect width="100%" height="100%" fill="white"/>'+holes+'</mask></defs>'+
+    '<rect width="100%" height="100%" fill="rgba(46,26,10,.55)" mask="url(#tut-mask)"/></svg>'+
+    rects.map(r=>'<div class="tut-ring" style="left:'+r.x+'px;top:'+r.y+'px;width:'+r.w+'px;height:'+r.h+'px"></div>').join('');
+  const c=document.getElementById('tut-coach'), cw=c.offsetWidth, ch=c.offsetHeight;
+  const clampX=x=>Math.max(m,Math.min(x,vw-cw-m)), clampY=y=>Math.max(m,Math.min(y,vh-ch-m));
+  let top, left;
+  if(!rects.length){ top=(vh-ch)/2; left=(vw-cw)/2; }
+  else {
+    const u=tutUnion(rects);
+    // Candidatos por ordem de preferência: por baixo/por cima de todos os alvos,
+    // depois de cada alvo, depois ao lado. Fica o primeiro que cabe sem tapar nenhum alvo.
+    const cands=[];
+    [u,...(rects.length>1?rects:[])].forEach(r=>{
+      const cx=clampX(r.x+r.w/2-cw/2);
+      cands.push([r.y+r.h+8,cx],[r.y-ch-8,cx]);
+    });
+    cands.push([clampY(u.y+u.h/2-ch/2),u.x+u.w+8],[clampY(u.y+u.h/2-ch/2),u.x-cw-8]);
+    const ok=([t,l])=>t>=m&&t+ch<=vh-m&&l>=m&&l+cw<=vw-m&&
+      rects.every(r=>t+ch<=r.y||t>=r.y+r.h||l+cw<=r.x||l>=r.x+r.w);
+    let hit=cands.find(ok);
+    if(!hit){ // não cabe em lado nenhum sem tapar: fica onde tapa menos área dos alvos
+      const cover=([t,l])=>rects.reduce((a,r)=>a+Math.max(0,Math.min(t+ch,r.y+r.h)-Math.max(t,r.y))*Math.max(0,Math.min(l+cw,r.x+r.w)-Math.max(l,r.x)),0);
+      const all=[...cands,[m,u.x+u.w/2-cw/2],[vh-ch-m,u.x+u.w/2-cw/2]].map(([t,l])=>[clampY(t),clampX(l)]);
+      hit=all.reduce((b,c)=>cover(c)<cover(b)?c:b);
+    }
+    top=hit[0]; left=hit[1];
+  }
+  c.style.top=Math.round(clampY(top))+'px';
+  c.style.left=Math.round(clampX(left))+'px';
+}
+function tutUnion(rects){
+  const x0=Math.min(...rects.map(r=>r.x)), y0=Math.min(...rects.map(r=>r.y));
+  const x1=Math.max(...rects.map(r=>r.x+r.w)), y1=Math.max(...rects.map(r=>r.y+r.h));
+  return { x:x0, y:y0, w:x1-x0, h:y1-y0 };
+}
+
+function tutClearTimers(){ tut.timers.forEach(clearTimeout); tut.timers=[]; tut.thinking=false; }
+
+function tutGo(i){
+  tutClearTimers();
+  while(i<TUT_STEPS.length-1&&TUT_STEPS[i].skip&&TUT_STEPS[i].skip()) i++;
+  tut.step=i;
+  const s=TUT_STEPS[i];
+  if(s.onEnter) s.onEnter();
+  tutRenderCoach();
+  tutScroll();
+}
+// Traz os alvos para o ecrã: se alvos + balão cabem juntos, centra esse bloco
+// (deixa espaço para o balão por baixo); senão centra o primeiro alvo.
+function tutScroll(){
+  const els=tutTargets();
+  if(!els.length){ window.scrollTo({ top:0, behavior:'smooth' }); return; }
+  if(els[0].closest('.overlay')) return;
+  const u=tutUnion(els.map(el=>{ const r=el.getBoundingClientRect(); return { x:r.left, y:r.top, w:r.width, h:r.height }; }));
+  const ch=document.getElementById('tut-coach').offsetHeight, vh=window.innerHeight;
+  if(u.h+ch+40<=vh) window.scrollTo({ top:window.scrollY+u.y-(vh-(u.h+ch+16))/2, behavior:'smooth' });
+  else els[0].scrollIntoView({ block:'center', behavior:'smooth' });
+}
+function tutNext(){ if(tut.active&&tut.step<TUT_STEPS.length-1) tutGo(tut.step+1); }
+
+function tutStart(){
+  if(tut.active) return;
+  const cur=document.querySelector('.screen.active');
+  tut.from=cur?cur.id:'screen-name';
+  tut.saved={ state, myGameSeat, isSolo, isHost };
+  const nm=myName||document.getElementById('inp-name').value.trim().slice(0,20)||'Jogador';
+  tut.g=tutNewGame(nm); tut.active=true;
+  // isSolo/isHost a false esconde o "Jogar Novamente" do ecrã final (não há servidor para o reiniciar).
+  myGameSeat=0; isSolo=false; isHost=false; _prevBetCount=-1; _prevBirdHolder=-99;
+  closeOverlay('overlay-gameover'); showScreen('screen-game'); window.scrollTo(0,0);
+  tutRender();
+  document.getElementById('tut-spot').classList.add('active');
+  document.getElementById('tut-coach').classList.add('active');
+  window.addEventListener('resize',tutPlace); window.addEventListener('scroll',tutPlace,{passive:true});
+  tut.tick=setInterval(tutPlace,250);
+  tutGo(0);
+}
+
+// Limpa todo o estado local e volta ao ecrã de onde se veio (ou a dest).
+function tutExit(dest){
+  if(!tut.active) return;
+  tut.active=false; tutClearTimers(); clearInterval(tut.tick); tut.tick=null;
+  window.removeEventListener('resize',tutPlace); window.removeEventListener('scroll',tutPlace);
+  ['tut-spot','tut-coach'].forEach(id=>{ const e=document.getElementById(id); e.classList.remove('active'); e.innerHTML=''; });
+  closeOverlay('overlay-gameover');
+  state=tut.saved.state; myGameSeat=tut.saved.myGameSeat; isSolo=tut.saved.isSolo; isHost=tut.saved.isHost;
+  tut.g=null; tut.saved=null; _prevBetCount=-1; _prevBirdHolder=-99;
+  ['players-bar','table-cards','my-scored','final-scores'].forEach(id=>{ document.getElementById(id).innerHTML=''; });
+  const to=dest||tut.from;
+  showScreen(to); window.scrollTo(0,0); updateTutHints();
+  if(to==='screen-lobby'){ renderLobbyList(_cachedLobbies); send({type:'LOBBIES'}); }
+}
+
+function tutPlayForReal(){
+  if(!myName){ const v=document.getElementById('inp-name').value.trim(); if(v) myName=v.slice(0,20); }
+  if(!myName){ tutExit('screen-name'); document.getElementById('inp-name').focus(); notif('Escreve o teu nome para jogar na Mesa Solo!'); return; }
+  tutExit('screen-lobby');
+  if(ws&&ws.readyState===1) send({type:'JOIN_LOBBY',lobbyId:'solo',playerName:myName});
+  else { _joinSoloOnConnect=true; connect(); }
+}
+
+// Aviso de primeira visita (até o tutorial ser concluído ou dispensado).
+function updateTutHints(){
+  const show=!lsGet(TUT_DONE_KEY)&&!lsGet(TUT_HINT_KEY);
+  document.querySelectorAll('[data-tut-hint]').forEach(el=>{
+    el.classList.toggle('show',show);
+    if(show&&!el.innerHTML) el.innerHTML=
+      '<div class="tut-hint-text"><b>Primeira vez por aqui?</b> Aprende a jogar em 2 minutos, com uma ronda de treino contra bots.</div>'+
+      '<button class="btn btn-primary btn-sm" onclick="tutStart()">🎓 Começar tutorial</button>'+
+      '<button class="tut-exit" onclick="dismissTutHint()">Agora não</button>';
+  });
+}
+function dismissTutHint(){ lsSet(TUT_HINT_KEY,'1'); updateTutHints(); }
+updateTutHints();
 
 // ── VIDEO RULES ──────────────────────────────────────────────────────────────
 function checkVideoExists(){
@@ -1638,6 +2120,8 @@ document.getElementById('btn-go').onclick=()=>{
   if(!ws||ws.readyState>1) connect(); else send({type:'LOBBIES'});
 };
 document.getElementById('btn-back-name').onclick=()=>showScreen('screen-name');
+document.getElementById('btn-tut-name').onclick=tutStart;
+document.getElementById('btn-tut-lobby').onclick=tutStart;
 document.getElementById('btn-start').onclick=()=>{ document.getElementById('btn-start').disabled=true; send({type:'START'}); };
 document.getElementById('btn-leave-wait').onclick=()=>{ send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; myLobbyId=''; myLobbySeat=-1; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
 document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };

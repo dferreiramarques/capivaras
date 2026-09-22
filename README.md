@@ -7,12 +7,13 @@ Play it live, no installs: it's a single Node.js server with a fully self-contai
 ## Gameplay at a glance
 
 - **Betting game**, not a turn-based game: every round, as many cards as there are players are dealt face-up. Everyone secretly commits to one card; bets are revealed simultaneously.
-- Pick a card **alone** → you win it. Pick a card **with someone else** → nobody wins it.
+- Pick a card **alone** → you win it. Pick a card **with someone else** → nobody wins it. Tied and unbet cards go to the discard; won cards stay with their owners and never come back.
 - Two collectible mechanics layer on top of the base capybara count: a **bird token** (steal-able, worth bonus points) and **four lily colors** (collect all four for a bonus).
-- Full rules, aimed at players (in Portuguese): [REGRAS.md](REGRAS.md).
+- Full rules, aimed at players (in Portuguese): [REGRAS.md](REGRAS.md). Printable versions: [REGRAS.pdf](REGRAS.pdf) (PT) and [RULES.pdf](RULES.pdf) (EN).
 
 ## Features
 
+- **Interactive tutorial** — a guided tour ("🎓 Tutorial" on the start screen and in the lobby) with two scripted practice rounds against bots. It runs entirely client-side: fake game states with the exact server shape, drawn by the real renderer, with the engine's own scoring/resolution functions — no server tables are created.
 - **Lobby system** — 5 public multiplayer tables (2–6 players each) plus a **solo mode** against 2 bots, playable instantly with no waiting.
 - **Real-time sync** over WebSockets — betting, reveals, and scoring are pushed live to every seat.
 - **Reconnect support** — dropped players get a grace period to rejoin the same seat via a session token; if they don't return in time, an auto-bet keeps the table from stalling.
