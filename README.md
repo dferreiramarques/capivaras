@@ -36,6 +36,8 @@ public/
   cards/            Capybara card artwork (PNG).
   ambient.mp3       Background ambient loop.
   bird.png          App icon / bird token art.
+tools/
+  make_rules_pdf.py Regenerates REGRAS.pdf / RULES.pdf (needs reportlab).
 ```
 
 ## Running locally
@@ -51,7 +53,7 @@ The server listens on `http://localhost:3000` by default (override with the `POR
 
 ## Rules & scoring
 
-See [REGRAS.md](REGRAS.md) for the full player-facing rules guide, in Portuguese, matching the in-app rules panel.
+See [REGRAS.md](REGRAS.md) for the full player-facing rules guide, in Portuguese, matching the in-app rules panel. The printable PDFs are generated with `python tools/make_rules_pdf.py` — when the rules change, update REGRAS.md, the in-app panel and that script together.
 
 ## License
 
