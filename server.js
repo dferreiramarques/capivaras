@@ -110,7 +110,8 @@ function serveStatic(req, res) {
 }
 
 // ─── DECK ────────────────────────────────────────────────────────────────────
-// img: PNG filename without extension, served from /public/cards/
+// img: filename without extension, served from /public/cards/ as .webp
+//      (600px, screen size; high-res PNG originals in art/cards-original/)
 // imgFallback: shown if img.png is missing (use plain card of same cap count)
 // Available PNGs (confirmed by artist):
 //   cap1, cap1_BW, cap1_R, cap1_W_bird
@@ -627,7 +628,7 @@ const CLIENT_HTML = `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Capivaras</title>
 <meta name="application-name" content="Capivaras">
 <meta name="description" content="Um jogo de apostas secretas no Pantanal">
@@ -710,7 +711,7 @@ const CLIENT_HTML = `<!DOCTYPE html>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   background: linear-gradient(160deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
   background-attachment: fixed;
   color: var(--ink);
@@ -718,7 +719,7 @@ body {
 }
 
 /* ── SCREENS ── */
-.screen { display: none; min-height: 100vh; }
+.screen { display: none; min-height: 100vh; min-height: 100dvh; }
 .screen.active { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
 #screen-game { justify-content: flex-start; padding: 12px; }
 
@@ -765,10 +766,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   font-family: var(--font-body); transition: all .15s; letter-spacing: .01em;
 }
 .btn-primary { background: var(--amber); color: #fff; width: 100%; box-shadow: 0 2px 8px rgba(196,124,40,.3); }
-.btn-primary:hover { background: var(--amber2); }
+@media (hover: hover) { .btn-primary:hover { background: var(--amber2); } }
 .btn-primary:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
 .btn-outline { background: rgba(255,255,255,.6); border: 1.5px solid var(--border); color: var(--ink2); }
-.btn-outline:hover { border-color: var(--amber); color: var(--ink); background: rgba(255,255,255,.9); }
+@media (hover: hover) { .btn-outline:hover { border-color: var(--amber); color: var(--ink); background: rgba(255,255,255,.9); } }
 .btn-sm { padding: 8px 16px; font-size: .83rem; }
 
 /* ── LOBBY ── */
@@ -779,9 +780,11 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   transition: border-color .18s, box-shadow .18s;
 }
-.lobby-row:not(.full):hover {
-  border-color: var(--amber);
-  box-shadow: 0 2px 12px rgba(196,124,40,.12);
+@media (hover: hover) {
+  .lobby-row:not(.full):hover {
+    border-color: var(--amber);
+    box-shadow: 0 2px 12px rgba(196,124,40,.12);
+  }
 }
 .lobby-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--ink); }
 .lobby-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
@@ -796,7 +799,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   white-space: nowrap; transition: background .15s;
   box-shadow: 0 2px 6px rgba(196,124,40,.25);
 }
-.join-btn:hover { background: var(--amber2); }
+@media (hover: hover) { .join-btn:hover { background: var(--amber2); } }
 .join-btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
 
 /* ── WAIT ── */
@@ -860,6 +863,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
      aspect-ratio 300/420 da carta) — para a mesa nunca empurrar a área de
      apostas/capivaras recolhidas para fora do ecrã (abaixo do fold). */
   grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)), calc((100vh - 610px) * 5 / 7)));
+  grid-template-columns: repeat(var(--n-cards,3), min(300px, calc((100vw - 80px) / var(--n-cards,3)), calc((100dvh - 610px) * 5 / 7)));
 }
 
 /* ── THE CARD ── */
@@ -984,7 +988,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .modal {
   background: var(--panel-b); border: 1.5px solid var(--border2);
   border-radius: var(--radius-lg); padding: 32px;
-  max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto;
+  max-width: 520px; width: 100%; max-height: 90vh; max-height: 90dvh; overflow-y: auto;
   box-shadow: var(--shadow-card-hover);
 }
 .modal h2 {
@@ -1024,7 +1028,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   font-size: 1.4rem; color: var(--amber); position: relative; z-index: 1;
   transition: background .2s;
 }
-.video-wrap:hover .play-icon { background: rgba(196,124,40,.28); }
+@media (hover: hover) { .video-wrap:hover .play-icon { background: rgba(196,124,40,.28); } }
 .video-label { font-size: .8rem; font-family: var(--font-display); font-style: italic; position: relative; z-index: 1; }
 .video-missing { font-size: .75rem; color: var(--muted); margin-top: 4px; position: relative; z-index: 1; }
 
@@ -1044,7 +1048,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   color: var(--ink2); text-align: left;
   transition: background .15s;
 }
-.rules-toggle:hover { background: rgba(196,124,40,.06); }
+@media (hover: hover) { .rules-toggle:hover { background: rgba(196,124,40,.06); } }
 .rules-toggle .chevron { font-size: .7rem; transition: transform .25s; color: var(--amber); }
 .rules-toggle.open .chevron { transform: rotate(180deg); }
 .rules-body {
@@ -1100,7 +1104,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   white-space: nowrap; transition: background .15s;
   font-family: var(--font-body); font-weight: 600;
 }
-.ambient-btn:hover { background: #e8f5f3; }
+@media (hover: hover) { .ambient-btn:hover { background: #e8f5f3; } }
 .ambient-btn .amb-icon { font-size: .95rem; line-height: 1; }
 
 /* ── TUTORIAL (tour guiado) ── */
@@ -1118,7 +1122,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 @keyframes tutPulse { 50% { box-shadow: 0 0 0 9px rgba(232,176,32,.1); } }
 .tut-coach {
   position: fixed; z-index: 310; display: none;
-  width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto;
   background: var(--panel-b); border: 1.5px solid var(--border);
   border-radius: var(--radius-lg); padding: 16px 18px 12px;
   box-shadow: var(--shadow-card-hover);
@@ -1155,7 +1159,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
   background: none; border: none; cursor: pointer; padding: 4px 0;
   font-family: var(--font-body); font-size: .76rem; color: var(--muted); text-decoration: underline;
 }
-.tut-exit:hover { color: var(--ink2); }
+@media (hover: hover) { .tut-exit:hover { color: var(--ink2); } }
 .tut-hint {
   display: none; align-items: center; gap: 10px; flex-wrap: wrap;
   background: #fff8e0; border: 1.5px solid #e8c878; border-radius: var(--radius-md);
@@ -1164,6 +1168,241 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
 .tut-hint.show { display: flex; }
 .tut-hint-text { flex: 1; min-width: 180px; line-height: 1.45; }
 .tut-hint .btn-primary { width: auto; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LAYOUT DE JOGO EM TELEMÓVEL — partes genéricas
+   Copiado da secção "Layout de jogo em telemóvel" de src/game-ui.css do
+   bitnikgames-design-system (receita completa em docs/game-layout.md).
+   Seletores adaptados às classes deste jogo: .modal-overlay/.modal-box →
+   .overlay/.modal, .btn/.tab → os botões daqui; tokens → os deste jogo.
+   Fora: .game-row, .hand-toggle e .recap-pill (não há fila com scroll
+   centrada, nem mão, nem botão "Continuar" entre rondas).
+───────────────────────────────────────────────────────────────────────── */
+/* altura real e toque: dvh = altura visível de facto (sem a barra do
+   browser móvel); overscroll-behavior evita o pull-to-refresh a meio de
+   uma ronda; touch-action tira o atraso/zoom de duplo toque. */
+html, body { height: 100%; }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }
+body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+button { touch-action: manipulation; }
+
+/* alvos de toque >= 44px (recomendação iOS/Android) */
+@media (pointer: coarse) {
+  .btn, .join-btn, .ambient-btn, .rules-toggle, .tut-exit { min-height: 44px; }
+}
+
+/* html.edge: margens de notch / barra de estado só em ecrã inteiro.
+   A classe é posta por syncEdge() quando a página ocupa o ecrã todo
+   (app instalada ou requestFullscreen). No browser normal é o próprio
+   browser que reserva essas zonas — aplicá-las aí criava faixas vazias. */
+html.edge .game-header {
+  padding-top: max(4px, env(safe-area-inset-top));
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
+}
+html.edge .screen.active:not(#screen-game) { padding-top: max(24px, env(safe-area-inset-top)); }
+
+/* modais: vertical estreito → bottom sheet (encostada em baixo, na zona do
+   polegar); horizontal baixo → menos moldura e quase o ecrã todo de altura. */
+@media (max-width: 640px) {
+  .overlay { justify-content: flex-end; align-items: stretch; flex-direction: column; padding: 0; }
+  .modal {
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-left: 0; border-right: 0; border-bottom: 0;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height: 88vh; max-height: 88dvh;
+    animation: sheetUp .25s ease;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .overlay { padding: 6px; }
+  .modal { padding: 10px 18px; max-height: calc(100vh - 12px); max-height: calc(100dvh - 12px); }
+}
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   COMPACTO — telemóvel, vertical ou deitado (= COMPACT_MQ no JS)
+   O ecrã de jogo deixa de ser uma página com scroll e passa a uma coluna
+   com a altura do ecrã: a mesa fica com o que sobra. Menos moldura e menos
+   texto (o JS desenha as versões curtas). Botões só do telemóvel no
+   cabeçalho (.hdr-compact): escondidos fora daqui.
+───────────────────────────────────────────────────────────────────────── */
+.hdr-compact { display: none; }
+@media (max-width: 640px), (orientation: landscape) and (max-height: 500px) {
+  #screen-game.active {
+    height: 100vh; height: 100dvh; min-height: 0;
+    padding: 0; overflow: hidden; align-items: stretch;
+  }
+  /* nada espremido: só a mesa encolhe */
+  #screen-game.active > * { flex-shrink: 0; max-width: none; }
+
+  /* Cabeçalho numa linha: pássaro · baralho · ⛶ 📖 🔇 Sair */
+  .game-header { margin: 0; padding: 4px 8px; gap: 6px; }
+  .header-left { gap: 6px; }
+  .bird-token { font-size: .66rem; padding: 3px 8px 3px 4px; gap: 4px; }
+  .bird-pip.big { width: 20px; height: 20px; }
+  .deck-info { display: block; font-size: .7rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .hdr-compact { display: inline-flex; }
+  .hdr-compact[hidden] { display: none; }
+  .game-header .btn-sm, .ambient-btn {
+    min-height: 34px; min-width: 34px; padding: 0 8px; font-size: .8rem;
+    justify-content: center;
+  }
+  .ambient-btn { gap: 0; }
+  #amb-label { display: none; }
+
+  /* Jogadores: grelha de colunas iguais, sem scroll; painel de 3 linhas curtas */
+  .players-bar {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 5px; padding: 5px 8px; margin: 0;
+  }
+  .player-chip {
+    min-width: 0; padding: 3px 7px 4px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 6px; align-items: center;
+    grid-template-areas: "name name" "pts lil" "bet bet";
+  }
+  .pname   { grid-area: name; font-size: .7rem; }
+  .ppts    { grid-area: pts; font-size: 1rem; line-height: 1.1; }
+  .ppts span { display: none; }
+  .plilies { grid-area: lil; margin: 0; height: 14px; line-height: 14px; white-space: nowrap; overflow: hidden; }
+  .plilies .bird-pip { width: 12px; height: 12px; vertical-align: -2px; }
+  .bird-count { font-size: .64rem; }
+  .pbet    { grid-area: bet; margin: 0; font-size: .62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Mesa: o tamanho das cartas sai do espaço que a célula tem de facto
+     (container queries). n cartas (= nº de jogadores) numa fila, OU em 2
+     linhas de ⌈n/2⌉ (--n-half, posto pelo JS) — fica a opção que der cartas
+     maiores; a ordem não conta, as letras identificam as cartas.
+     Carta = arte 5:7 + faixa de info de altura fixa; 30px = faixa + bordas. */
+  #screen-game .table-area {
+    flex: 1 1 0; min-height: 0; margin: 0;
+    container-type: size; overflow: hidden;
+  }
+  .table-cards {
+    display: flex; flex-wrap: wrap; gap: 6px; height: 100%; padding: 6px 10px;
+    justify-content: safe center; align-content: safe center;
+    --cw1: min(calc((100cqw - 20px - var(--tut-gutter, 0px) - (var(--n-cards, 3) - 1) * 6px) / var(--n-cards, 3)),
+               calc((100cqh - 12px - 30px) * 5 / 7));
+    --cw2: min(calc((100cqw - 20px - (var(--n-half, 2) - 1) * 6px) / var(--n-half, 2)),
+               calc(((100cqh - 18px) / 2 - 30px) * 5 / 7));
+  }
+  .table-cards .cap-card { flex: none; width: max(var(--cw1), var(--cw2)); }
+  /* No tutorial, uma fila só e encostada em cima: sobra espaço por baixo para o balão */
+  body:has(.tut-coach.active) .table-cards { align-content: safe flex-start; }
+  body:has(.tut-coach.active) .table-cards .cap-card { width: var(--cw1); }
+  .card-info {
+    height: 24px; padding: 0 6px; display: flex; align-items: center; gap: 4px;
+    white-space: nowrap; overflow: hidden;
+  }
+  .card-caps-count { margin: 0; font-size: .9rem; line-height: 1; }
+  .card-badges { flex-wrap: nowrap; gap: 1px; align-items: center; font-size: .75rem; }
+  .card-badges .bird-pip { width: 14px; height: 14px; }
+  .card-pos-badge { top: 4px; left: 4px; padding: 1px 6px; }
+  .card-result-label { top: auto; bottom: 30px; left: 4px; right: 4px; max-width: none; text-align: center; }
+
+  /* A minha área: estado numa caixa de 2 linhas fixas + faixa de miniaturas */
+  .status-bar {
+    width: auto; margin: 0 8px; padding: 4px 10px; gap: 8px;
+    flex-wrap: nowrap; box-shadow: none;
+  }
+  .phase-badge { white-space: nowrap; font-size: .7rem; padding: 2px 9px; }
+  .status-text {
+    min-width: 0; font-size: .78rem; line-height: 1.25; height: 2.5em;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    align-content: center;
+  }
+  .bet-count { font-size: .72rem; white-space: nowrap; }
+  .my-area { padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+  .my-area-label { display: none; }
+  .my-scored { gap: 5px; padding-bottom: 0; min-height: 60px; align-items: center; }
+  .mini-card { width: 44px; border-radius: var(--radius-sm); }
+  .mini-card-art { aspect-ratio: 1; }
+  .mini-card-label {
+    height: 16px; padding: 0 4px; font-size: .62rem; font-weight: 700; line-height: 15px;
+    white-space: nowrap; overflow: hidden;
+  }
+
+  /* Regras: o acordeão sai do fundo da página e passa a bottom sheet,
+     aberta pelo 📖 do cabeçalho (toggleRules) */
+  .rules-panel { display: none; }
+  .rules-panel.open {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+    max-width: 640px; margin: 0 auto;
+    max-height: 88vh; max-height: 88dvh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0;
+    background: var(--panel-b);
+    box-shadow: 0 0 0 100vmax rgba(46,26,10,.55);
+    animation: sheetUp .25s ease;
+  }
+  .rules-panel.open .rules-toggle { flex-shrink: 0; }
+  .rules-panel.open .rules-body { overflow-y: auto; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+
+  /* Fim do jogo e balão do tutorial: menos moldura */
+  .modal h2 { font-size: 1.4rem; margin-bottom: 12px; }
+  .modal-actions { margin-top: 14px; }
+  .tut-coach { padding: 12px 14px 10px; }
+  .tut-text { font-size: .8rem; line-height: 1.45; }
+  .tut-progress { margin: 8px 0 6px; }
+  /* se o balão tiver de encolher (scroll interno), os botões ficam sempre à vista */
+  .tut-actions { position: sticky; bottom: 0; background: var(--panel-b); }
+
+  #notif { top: 48px; right: 8px; }
+}
+
+/* Vertical: no tutorial as cartas ficam com no máximo ~40% da mesa, para o
+   balão caber por baixo delas mesmo num ecrã de 600px. */
+@media (max-width: 640px) and (orientation: portrait) {
+  body:has(.tut-coach.active) .table-cards .cap-card { width: min(var(--cw1), calc((40cqh - 30px) * 5 / 7)); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TELEMÓVEL NA HORIZONTAL — 2 colunas
+   Com ~300–390px de altura não dá para empilhar: jogadores e mesa à
+   esquerda, estado e as minhas capivaras à direita.
+───────────────────────────────────────────────────────────────────────── */
+@media (orientation: landscape) and (max-height: 500px) {
+  #screen-game.active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 34%);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "header header" "players status" "table my";
+  }
+  html.edge #screen-game.active { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  .game-header { grid-area: header; padding-top: 2px; padding-bottom: 2px; }
+  .players-bar { grid-area: players; }
+  #screen-game .table-area { grid-area: table; }
+  .status-bar  { grid-area: status; align-self: center; margin: 5px 8px 0 0; flex-wrap: wrap; row-gap: 2px; }
+  .status-text { flex-basis: 100%; order: 3; }
+  .bet-count   { margin-left: auto; }
+  .my-area {
+    grid-area: my; min-height: 0; overflow-y: auto;
+    border-left: 1px solid var(--border2); margin-top: 6px;
+  }
+  .my-scored { flex-wrap: wrap; overflow-x: visible; align-content: flex-start; }
+
+  /* Fim do jogo: tem de caber em ~300px — nome e detalhe na mesma linha */
+  .modal h2 { font-size: 1.15rem; margin-bottom: 4px; }
+  .score-row { padding: 2px 0; line-height: 1.25; }
+  .score-name { font-size: .9rem; }
+  .score-pts  { font-size: .95rem; }
+  .score-row > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+  .modal-actions { margin-top: 8px; }
+  .modal-actions .btn { min-height: 38px; padding-top: 6px; padding-bottom: 6px; }
+  /* No tutorial o balão vai ao lado do modal: modal mais estreito e à esquerda */
+  body:has(.tut-coach.active) .overlay { justify-content: flex-start; }
+  body:has(.tut-coach.active) .modal { max-width: min(420px, 55vw); }
+  /* …e a mesa encosta à esquerda com uma margem, para o balão caber ao lado das cartas */
+  body:has(.tut-coach.active) .table-cards { justify-content: safe flex-start; --tut-gutter: 50px; }
+  /* Balão mais largo e mais baixo: com ~300px de altura cada linha conta */
+  .tut-coach { width: min(460px, calc(100vw - 24px)); padding: 10px 14px 8px; }
+  .tut-title { font-size: 1rem; margin-bottom: 3px; }
+  .tut-text  { font-size: .78rem; line-height: 1.4; }
+  .tut-queue, .tut-shortcuts { margin-top: 6px; }
+  .tut-progress { margin: 6px 0 4px; }
+  .tut-actions .btn { min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
+}
 </style>
 </head>
 <body>
@@ -1234,8 +1473,10 @@ input[type=text]::placeholder { color: var(--muted); opacity: .7; }
       <div class="bird-token" id="bird-token-display">Pássaro — sem detentor</div>
       <div class="deck-info" id="deck-info">—</div>
     </div>
-    <audio id="ambient-audio" src="/ambient.mp3" loop preload="auto"></audio>
+    <audio id="ambient-audio" src="/ambient.mp3" loop preload="none"></audio>
     <div style="display:flex;align-items:center;gap:6px">
+      <button class="btn btn-outline btn-sm hdr-compact" id="btn-fullscreen" hidden aria-label="Ecrã inteiro">⛶</button>
+      <button class="btn btn-outline btn-sm hdr-compact" id="btn-rules-game" onclick="toggleRules()" aria-label="Regras">📖</button>
       <button class="ambient-btn" id="ambient-btn" onclick="toggleAmbient()" title="Música ambiente">
         <span class="amb-icon" id="amb-icon">🔇</span>
         <span id="amb-label">Som</span>
@@ -1327,6 +1568,13 @@ const LI = { Y:'lily-Y', R:'lily-R', W:'lily-W', B:'lily-B' };
 const LE = { Y:'●', R:'●', W:'●', B:'●' };
 const LC = { Y:'#e8a820', R:'#d85030', W:'#8898a8', B:'#4898c8' };
 
+// Modo compacto (telemóvel, vertical ou deitado) — o MESMO critério do @media
+// COMPACTO no CSS. O CSS muda o layout; o JS decide o que desenhar (textos curtos,
+// bolinhas em vez de etiquetas). Ao rodar o telemóvel redesenha.
+const COMPACT_MQ = window.matchMedia('(max-width: 640px), (orientation: landscape) and (max-height: 500px)');
+const isCompact  = () => COMPACT_MQ.matches;
+const lilyDots = lilies => lilies.map(l=>'<span style="color:'+LC[l]+'" title="Nenúfar '+LL[l]+'">●</span>').join('');
+
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
 function openOverlay(id){ document.getElementById(id).classList.add('active'); }
 function closeOverlay(id){ document.getElementById(id).classList.remove('active'); }
@@ -1337,7 +1585,7 @@ let _nt;
 function notif(t,d=3200){ const e=document.getElementById('notif'); e.textContent=t; e.classList.add('show'); clearTimeout(_nt); _nt=setTimeout(()=>e.classList.remove('show'),d); }
 
 function cardArtHTML(card){
-  const src='/cards/'+card.img+'.png';
+  const src='/cards/'+card.img+'.webp';
   return '<div class="card-art-wrap">'+
     '<img class="card-art" src="'+src+'" alt="" onerror="capImgErr(this)">'+
     '<div class="card-art-fallback hidden">'+card.cap+'</div>'+
@@ -1527,6 +1775,7 @@ function renderWaitRoom(msg){
 
 function renderGame(){
   if(!state) return;
+  const compact=isCompact();
 
   /* players bar */
   const bar=document.getElementById('players-bar'); bar.innerHTML='';
@@ -1536,7 +1785,7 @@ function renderGame(){
 
     const nameDiv=document.createElement('div'); nameDiv.className='pname';
     nameDiv.textContent=p.name;
-    if(p.isMe){ const tu=document.createElement('span'); tu.style.cssText='color:var(--amber);font-size:.58rem'; tu.textContent=' (tu)'; nameDiv.appendChild(tu); }
+    if(p.isMe&&!compact){ const tu=document.createElement('span'); tu.style.cssText='color:var(--amber);font-size:.58rem'; tu.textContent=' (tu)'; nameDiv.appendChild(tu); }
     chip.appendChild(nameDiv);
 
     const ptsDiv=document.createElement('div'); ptsDiv.className='ppts';
@@ -1549,7 +1798,7 @@ function renderGame(){
     else p.lilies.forEach(l=>{ const s=document.createElement('span'); s.style.cssText='color:'+LC[l]+';font-size:.9em'; s.title='Nenúfar '+LL[l]; s.textContent='●'; lilDiv.appendChild(s); });
     if(p.birdCards>0){
       const bc=document.createElement('span'); bc.className='bird-count'; bc.title='Cartas com pássaro';
-      const bimg=document.createElement('img'); bimg.src='/bird.png'; bimg.className='bird-pip'; bimg.alt='';
+      const bimg=document.createElement('img'); bimg.src='/bird-64.webp'; bimg.className='bird-pip'; bimg.alt='';
       bc.appendChild(bimg); bc.appendChild(document.createTextNode(p.birdCards));
       lilDiv.appendChild(bc);
     }
@@ -1564,6 +1813,7 @@ function renderGame(){
   /* table cards */
   const area=document.getElementById('table-cards'); area.innerHTML='';
   area.style.setProperty('--n-cards', state.n);
+  area.style.setProperty('--n-half', Math.ceil(state.n/2)); // mesa em 2 linhas (só no compacto)
   (state.table||[]).forEach((card,pos)=>{
     const div=document.createElement('div');
     let cls='cap-card', extra='';
@@ -1576,16 +1826,17 @@ function renderGame(){
       } else { cls+=' nobody'; extra='<div class="card-result-label nobody">Ninguém</div>'; }
     } else if(state.phase==='BETTING'&&state.myBet===pos){ cls+=' selected'; }
 
-    const lilyB=card.lilies.map(l=>'<span class="lily '+LI[l]+'">'+LL[l]+'</span>').join('');
-    const birdB=card.bird?'<span class="lily lily-bird">Pássaro</span>':'';
-    const capWord=card.cap===1?'capivara':'capivaras';
+    // Compacto: faixa de uma linha só — nº de capivaras + bolinhas + pássaro.
+    const lilyB=compact?lilyDots(card.lilies):card.lilies.map(l=>'<span class="lily '+LI[l]+'">'+LL[l]+'</span>').join('');
+    const birdB=card.bird?(compact?'<img src="/bird-64.webp" class="bird-pip" alt="Pássaro" title="Pássaro">':'<span class="lily lily-bird">Pássaro</span>'):'';
+    const capWord=compact?'':' '+(card.cap===1?'capivara':'capivaras');
 
     div.className=cls;
     div.innerHTML=
       cardArtHTML(card)+
       '<div class="card-pos-badge">'+String.fromCharCode(64+pos+1)+'</div>'+
       '<div class="card-info">'+
-        '<div class="card-caps-count">'+card.cap+' '+capWord+'</div>'+
+        '<div class="card-caps-count">'+card.cap+capWord+'</div>'+
         '<div class="card-badges">'+lilyB+birdB+'</div>'+
       '</div>'+extra;
 
@@ -1601,8 +1852,10 @@ function renderGame(){
   if(state.phase==='BETTING'){
     badge.textContent='A Apostar';
     const placed=state.betsPlaced.filter(Boolean).length;
-    cnt.textContent=placed+'/'+state.n+' apostas';
-    text.textContent=state.myBet===null?'Escolhe uma carta para apostar':'Apostaste na carta '+String.fromCharCode(64+state.myBet+1)+' — a aguardar os outros...';
+    cnt.textContent=placed+'/'+state.n+(compact?'':' apostas');
+    const myL=state.myBet===null?'':String.fromCharCode(64+state.myBet+1);
+    if(compact) text.textContent=state.myBet===null?'Escolhe uma carta':'Apostaste na '+myL+' — à espera dos outros';
+    else text.textContent=state.myBet===null?'Escolhe uma carta para apostar':'Apostaste na carta '+myL+' — a aguardar os outros...';
   } else if(state.phase==='REVEAL'){
     badge.textContent='Revelação'; cnt.textContent='';
     const bu=state.lastResult&&state.lastResult.birdUpdate;
@@ -1620,15 +1873,16 @@ function renderGame(){
     const wrap=document.createElement('div'); wrap.className='mini-card';
     // art
     const artImg=document.createElement('img'); artImg.className='mini-card-art';
-    artImg.src='/cards/'+mc.img+'.png'; artImg.alt='';
+    artImg.src='/cards/'+mc.img+'.webp'; artImg.alt='';
     artImg.onerror=function(){ this.style.display='none'; this.nextElementSibling.style.display='flex'; };
     const artFb=document.createElement('div'); artFb.className='mini-card-art fallback'; artFb.style.display='none'; artFb.textContent=mc.cap;
     wrap.appendChild(artImg); wrap.appendChild(artFb);
     // label
     const lbl=document.createElement('div'); lbl.className='mini-card-label';
     const capWord=mc.cap===1?'capivara':'capivaras';
-    lbl.textContent=mc.cap+' '+capWord;
-    if(mc.lilies.length||mc.bird){
+    lbl.textContent=mc.cap+(compact?'':' '+capWord);
+    if(compact){ lbl.insertAdjacentHTML('beforeend',' '+lilyDots(mc.lilies)+(mc.bird?' <img src="/bird-64.webp" class="bird-pip" alt="Pássaro" style="width:11px;height:11px;vertical-align:-1px">':'')); }
+    else if(mc.lilies.length||mc.bird){
       const badges=document.createElement('div'); badges.className='mini-card-badges';
       mc.lilies.forEach(l=>{ const s=document.createElement('span'); s.className='mini-lily lily-'+l; s.textContent=LL[l]; badges.appendChild(s); });
       if(mc.bird){ const b=document.createElement('span'); b.className='mini-lily lily-bird'; b.textContent='Pássaro'; badges.appendChild(b); }
@@ -1640,12 +1894,13 @@ function renderGame(){
 
   /* bird token */
   const bt=document.getElementById('bird-token-display');
-  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> Pássaro — sem detentor'; bt.className='bird-token'; }
-  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird.png" class="bird-pip big" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
+  if(state.birdHolder===null){ bt.innerHTML='<img src="/bird-64.webp" class="bird-pip big" alt=""> '+(compact?'sem dono':'Pássaro — sem detentor'); bt.className='bird-token'; }
+  else { const h=state.players[state.birdHolder]; bt.innerHTML='<img src="/bird-64.webp" class="bird-pip big" alt=""> '+(h?esc(h.name):'?')+' ('+state.birdHolderCards+'x)'; bt.className='bird-token has-holder'; }
 
   /* deck */
-  document.getElementById('deck-info').textContent=
-    state.deckPass===0?'1.ª passagem — '+state.deckLeft+' cartas':'2.ª passagem — '+state.deckLeft+' cartas';
+  const deck=document.getElementById('deck-info'), pass=state.deckPass===0?'1.ª':'2.ª';
+  deck.textContent=compact?pass+' · '+state.deckLeft+' cartas':pass+' passagem — '+state.deckLeft+' cartas';
+  deck.title=pass+' passagem — '+state.deckLeft+' cartas no baralho';
 }
 
 function showGameOver(){
@@ -1871,8 +2126,8 @@ const TUT_STEPS=[
     text:'Diz a fase (<b>A Apostar</b> ou <b>Revelação</b>), o que tens de fazer e quantas apostas já foram feitas.' },
   { id:'minhas', title:'As tuas capivaras', target:['.my-area'],
     text:'As cartas que ganhas ficam aqui. É desta fila que saem os teus pontos e as tuas cores de nenúfar.' },
-  { id:'regras', title:'Regras sempre à mão', target:['.rules-panel'],
-    text:'Durante o jogo podes abrir este painel para rever as regras sempre que quiseres.' },
+  { id:'regras', title:'Regras sempre à mão', target:['.rules-panel','#btn-rules-game'],
+    text:()=>isCompact()?'Durante o jogo, o botão 📖 abre as regras sempre que quiseres.':'Durante o jogo podes abrir este painel para rever as regras sempre que quiseres.' },
   { id:'ordem1', title:'Quem joga quando?', target:['#players-bar'], queue:{ order:TUT_Q1, fresh:true },
     text:'No Capivaras <b>não há turnos</b>: todos apostam ao mesmo tempo, em segredo, e a ronda só se resolve quando toda a gente apostou. Neste treino vamos <b>um de cada vez</b> para veres cada passo — primeiro tu, depois cada bot:' },
   { id:'aposta1', mode:'bet', title:'A tua aposta', target:['#table-cards .cap-card'], queue:{ order:TUT_Q1 },
@@ -1957,7 +2212,9 @@ function tutPlace(){
     '<svg><defs><mask id="tut-mask"><rect width="100%" height="100%" fill="white"/>'+holes+'</mask></defs>'+
     '<rect width="100%" height="100%" fill="rgba(46,26,10,.55)" mask="url(#tut-mask)"/></svg>'+
     rects.map(r=>'<div class="tut-ring" style="left:'+r.x+'px;top:'+r.y+'px;width:'+r.w+'px;height:'+r.h+'px"></div>').join('');
-  const c=document.getElementById('tut-coach'), cw=c.offsetWidth, ch=c.offsetHeight;
+  const c=document.getElementById('tut-coach');
+  c.style.width=''; c.style.maxHeight='';
+  let cw=c.offsetWidth, ch=c.offsetHeight;
   const clampX=x=>Math.max(m,Math.min(x,vw-cw-m)), clampY=y=>Math.max(m,Math.min(y,vh-ch-m));
   let top, left;
   if(!rects.length){ top=(vh-ch)/2; left=(vw-cw)/2; }
@@ -1974,6 +2231,29 @@ function tutPlace(){
     const ok=([t,l])=>t>=m&&t+ch<=vh-m&&l>=m&&l+cw<=vw-m&&
       rects.every(r=>t+ch<=r.y||t>=r.y+r.h||l+cw<=r.x||l>=r.x+r.w);
     let hit=cands.find(ok);
+    if(!hit){ // mais estreito (telemóvel): ao lado dos alvos, ou por baixo/por cima de um alvo com a largura dele
+      const maxW=cw, sL=u.x-m*2, sR=vw-u.x-u.w-m*2;
+      const narrow=[[Math.min(maxW,Math.max(sL,sR)), ()=>[clampY(u.y+u.h/2-ch/2), sR>=sL?u.x+u.w+8:u.x-cw-8]]];
+      if(rects.length>1) rects.forEach(r=>{
+        // largura do alvo (dentro do ecrã), menos folga para não tocar nos alvos vizinhos
+        const w=Math.min(maxW,Math.min(r.x+r.w,vw-m)-Math.max(r.x,m)-20), cx=()=>clampX(r.x+r.w/2-cw/2);
+        narrow.push([w,()=>[r.y+r.h+8,cx()]],[w,()=>[r.y-ch-8,cx()]]);
+      });
+      for(const [w,pos] of narrow){
+        if(w<240) continue;
+        c.style.width=w+'px'; cw=c.offsetWidth; ch=c.offsetHeight;
+        const p=pos(); if(ok(p)){ hit=p; break; }
+      }
+      if(!hit){ c.style.width=''; cw=c.offsetWidth; ch=c.offsetHeight; }
+    }
+    if(!hit){ // mais baixo, com scroll interno (os botões ficam fixos em baixo), no lado com mais espaço
+      const below=vh-m-(u.y+u.h+8), above=u.y-8-m, sp=Math.floor(Math.max(below,above));
+      if(sp>=180){
+        c.style.maxHeight=sp+'px'; ch=c.offsetHeight;
+        const p=[below>=above?u.y+u.h+8:u.y-ch-8, clampX(u.x+u.w/2-cw/2)];
+        if(ok(p)) hit=p; else { c.style.maxHeight=''; ch=c.offsetHeight; }
+      }
+    }
     if(!hit){ // não cabe em lado nenhum sem tapar: fica onde tapa menos área dos alvos
       const cover=([t,l])=>rects.reduce((a,r)=>a+Math.max(0,Math.min(t+ch,r.y+r.h)-Math.max(t,r.y))*Math.max(0,Math.min(l+cw,r.x+r.w)-Math.max(l,r.x)),0);
       const all=[...cands,[m,u.x+u.w/2-cw/2],[vh-ch-m,u.x+u.w/2-cw/2]].map(([t,l])=>[clampY(t),clampX(l)]);
@@ -2109,6 +2389,7 @@ function toggleRules(){
   if(!body||!btn) return;
   const open=body.classList.toggle('open');
   btn.classList.toggle('open', open);
+  btn.closest('.rules-panel').classList.toggle('open', open); // no compacto: bottom sheet
 }
 
 document.getElementById('inp-name').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('btn-go').click(); });
@@ -2127,6 +2408,32 @@ document.getElementById('btn-leave-wait').onclick=()=>{ send({type:'LEAVE_LOBBY'
 document.getElementById('btn-leave-game').onclick=()=>{ if(confirm('Sair do jogo?')){ _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); } };
 document.getElementById('btn-restart').onclick=()=>{ closeOverlay('overlay-gameover'); send({type:'RESTART'}); };
 document.getElementById('btn-goto-lobby').onclick=()=>{ closeOverlay('overlay-gameover'); _prevBetCount=-1; _prevBirdHolder=-99; send({type:'LEAVE_LOBBY'}); sessionStorage.removeItem('cap_token'); myToken=''; state=null; showScreen('screen-lobby'); send({type:'LOBBIES'}); };
+
+// ── ECRÃ INTEIRO / APP INSTALADA ─────────────────────────────────────────────
+// html.edge liga as margens de notch/barra de estado (só quando a página ocupa
+// o ecrã todo). No iPhone não há requestFullscreen para páginas: só a PWA.
+function isPwaInstalled(){ return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true; }
+const canFullscreen=()=>!!document.documentElement.requestFullscreen&&document.fullscreenEnabled&&!isPwaInstalled();
+function goFullscreen(){
+  if(!canFullscreen()||document.fullscreenElement) return;
+  document.documentElement.requestFullscreen({ navigationUI:'hide' }).catch(()=>{});
+}
+function syncEdge(){
+  document.documentElement.classList.toggle('edge', isPwaInstalled()||!!document.fullscreenElement);
+  const b=document.getElementById('btn-fullscreen');
+  b.hidden=!canFullscreen()||!isCompact();
+  b.textContent=document.fullscreenElement?'🗗':'⛶';
+}
+document.getElementById('btn-fullscreen').onclick=()=>document.fullscreenElement?document.exitFullscreen().catch(()=>{}):goFullscreen();
+// Entra sozinho no toque que abre uma mesa / o tutorial (só em ecrã tátil; tem de ser dentro do gesto).
+document.addEventListener('click',e=>{
+  if(matchMedia('(pointer: coarse)').matches&&
+     e.target.closest('.join-btn, #btn-start, #btn-tut-name, #btn-tut-lobby, #btn-restart, [data-tut-hint] .btn-primary, .tut-final .btn-primary'))
+    goFullscreen();
+},true);
+document.addEventListener('fullscreenchange',syncEdge);
+COMPACT_MQ.addEventListener('change',()=>{ syncEdge(); if(state&&document.getElementById('screen-game').classList.contains('active')){ renderGame(); if(tut.active) tutRenderCoach(); } });
+syncEdge();
 
 if(sessionStorage.getItem('cap_token')) connect();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

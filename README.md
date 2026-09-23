@@ -25,7 +25,7 @@ Play it live, no installs: it's a single Node.js server with a fully self-contai
 
 - **Backend:** plain Node.js (`http` + [`ws`](https://www.npmjs.com/package/ws)) — no framework, no database. All game state lives in memory.
 - **Frontend:** a single HTML/CSS/JS string served by the Node process (`CLIENT_HTML` in [server.js](server.js)) — no bundler, no build step.
-- **Assets:** card art and audio live under [public/](public); everything else (manifest, PWA splash PNGs, service worker) is generated in code.
+- **Assets:** card art and audio live under [public/](public), resized for the screen (originals in [art/](art)); everything else (manifest, PWA splash PNGs, service worker) is generated in code.
 
 ## Project structure
 
@@ -33,9 +33,11 @@ Play it live, no installs: it's a single Node.js server with a fully self-contai
 server.js          Everything: HTTP + WebSocket server, game logic, bot AI,
                     and the entire client (HTML/CSS/JS) as an embedded string.
 public/
-  cards/            Capybara card artwork (PNG).
-  ambient.mp3       Background ambient loop.
-  bird.png          App icon / bird token art.
+  cards/            Capybara card artwork (WebP, 600px — screen size).
+  ambient.mp3       Background ambient loop (96 kbps).
+  bird.png          App icon.
+  bird-64.webp      Bird token art (small, for the UI).
+art/                High-resolution originals (not served): card PNGs, ambient audio.
 tools/
   make_rules_pdf.py Regenerates REGRAS.pdf / RULES.pdf (needs reportlab).
 ```
