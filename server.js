@@ -470,7 +470,7 @@ function handleAction(ws, msg) {
   if (msg.type === 'RESTART') {
     if (!g || g.phase !== 'GAME_OVER') return;
     if (lobby.solo) {
-      lobby.game = newGame([lobby.names[0]||'Jogador','Bot Capivaras 1','Bot Capivaras 2'], true);
+      lobby.game = newGame([lobby.names[0]||'Jogador','Bot-capi 1','Bot-capi 2'], true);
       lobby.seatMap = null; const s = wsState.get(ws); if (s) s.gameSeat = 0;
       broadcastGame(lobby); scheduleBots(lobby);
     } else {
@@ -515,7 +515,7 @@ function handleJoin(ws, msg) {
   broadcastLobbyList();
   if (lobby.solo) {
     lobby.seatMap=null; const s=wsState.get(ws); if(s) s.gameSeat=0;
-    lobby.game=newGame([name,'Bot Capivaras 1','Bot Capivaras 2'],true);
+    lobby.game=newGame([name,'Bot-capi 1','Bot-capi 2'],true);
     broadcastGame(lobby); scheduleBots(lobby);
   }
 }
@@ -558,9 +558,9 @@ const MANIFEST = `{
   "theme_color": "#c47c28",
   "orientation": "any",
   "icons": [
-    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/bird.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "/bird.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }`;
@@ -1411,6 +1411,7 @@ html.edge .screen.active:not(#screen-game) { padding-top: max(24px, env(safe-are
 <!-- NAME -->
 <div class="screen active" id="screen-name">
   <div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+    <div class="tut-hint" data-install-hint></div>
     <div class="tut-hint" data-tut-hint></div>
     <div class="card-box" style="text-align:center">
       <div class="game-logo">Capi<span>varas</span></div>
@@ -1436,6 +1437,7 @@ html.edge .screen.active:not(#screen-game) { padding-top: max(24px, env(safe-are
     <div style="text-align:center;margin-bottom:24px">
       <div class="game-logo" style="font-size:2.2rem">Capi<span>varas</span></div>
     </div>
+    <div class="tut-hint" data-install-hint style="margin-bottom:16px"></div>
     <div class="tut-hint" data-tut-hint style="margin-bottom:16px"></div>
     <h2>Escolhe uma mesa</h2>
     <div class="lobby-grid" id="lobby-list"></div>
@@ -1965,7 +1967,7 @@ function tutClone(c){ return { ...c, lilies:[...c.lilies] }; }
 // Espelho de newGame() para a Mesa Solo (3 jogadores, 36 cartas).
 function tutNewGame(name){
   return {
-    players: [name,'Bot Capivaras 1','Bot Capivaras 2'].map(n=>({ name:n, scored:[], birdCards:0 })),
+    players: [name,'Bot-capi 1','Bot-capi 2'].map(n=>({ name:n, scored:[], birdCards:0 })),
     n:3, deck:new Array(33).fill(null), discard:[], table:TUT_TABLES[0].map(tutClone),
     bets:[null,null,null], birdHolder:null, birdTie:0,
     phase:'BETTING', deckPass:0, lastResult:null,
@@ -2132,18 +2134,18 @@ const TUT_STEPS=[
     text:'No Capivaras <b>não há turnos</b>: todos apostam ao mesmo tempo, em segredo, e a ronda só se resolve quando toda a gente apostou. Neste treino vamos <b>um de cada vez</b> para veres cada passo — primeiro tu, depois cada bot:' },
   { id:'aposta1', mode:'bet', title:'A tua aposta', target:['#table-cards .cap-card'], queue:{ order:TUT_Q1 },
     text:'Toca numa carta para apostar nela (ou usa os atalhos aqui em baixo). A aposta é <b>imediata</b> e não dá para voltar atrás.' },
-  { id:'bot1r1', mode:'bot', seat:1, title:'Vez do Bot Capivaras 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q1 },
+  { id:'bot1r1', mode:'bot', seat:1, title:'Vez do Bot-capi 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q1 },
     onEnter:()=>tutBotTurn(1), text:()=>tutBotText(1) },
-  { id:'bot2r1', mode:'bot', seat:2, title:'Vez do Bot Capivaras 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q1 },
+  { id:'bot2r1', mode:'bot', seat:2, title:'Vez do Bot-capi 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q1 },
     onEnter:()=>tutBotTurn(2), text:()=>tutBotText(2) },
   { id:'revela1', title:'Revelação!', target:['#table-cards .cap-card'],
     onEnter:()=>{ if(tut.g.phase==='BETTING') tutResolve(); }, text:()=>tutRevealText() },
   { id:'pontos1', title:'Pontos ganhos', target:['#players-bar','.my-area'], text:()=>tutPointsText() },
   { id:'ordem2', title:'E a ronda seguinte?', target:['#players-bar'], queue:{ order:TUT_Q2, fresh:true },
     text:'Depois da revelação há uma pausa de uns segundos e a ronda seguinte começa sozinha. Ninguém passa a ser “primeiro jogador” — como ninguém vê as apostas dos outros, apostar mais cedo ou mais tarde <b>não dá vantagem</b>. Para o provar, na ronda 2 os bots apostam primeiro:' },
-  { id:'bot1r2', mode:'bot', seat:1, title:'Vez do Bot Capivaras 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q2 },
+  { id:'bot1r2', mode:'bot', seat:1, title:'Vez do Bot-capi 1', target:['#players-bar .player-chip:nth-child(2)'], queue:{ order:TUT_Q2 },
     onEnter:()=>{ if(tut.g.round===0) tutNextRound(); tutBotTurn(1); }, text:()=>tutBotText(1) },
-  { id:'bot2r2', mode:'bot', seat:2, title:'Vez do Bot Capivaras 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q2 },
+  { id:'bot2r2', mode:'bot', seat:2, title:'Vez do Bot-capi 2', target:['#players-bar .player-chip:nth-child(3)'], queue:{ order:TUT_Q2 },
     onEnter:()=>tutBotTurn(2), text:()=>tutBotText(2) },
   { id:'aposta2', mode:'bet', title:'A tua vez (ronda 2)', target:['#table-cards .cap-card'], queue:{ order:TUT_Q2 },
     skip:()=>tut.g.bets[0]!==null,
@@ -2434,6 +2436,32 @@ document.addEventListener('click',e=>{
 document.addEventListener('fullscreenchange',syncEdge);
 COMPACT_MQ.addEventListener('change',()=>{ syncEdge(); if(state&&document.getElementById('screen-game').classList.contains('active')){ renderGame(); if(tut.active) tutRenderCoach(); } });
 syncEdge();
+
+// ── INSTALAR COMO APP (Android) ──────────────────────────────────────────────
+// O Chrome/Edge em Android dispara beforeinstallprompt quando a página pode ser
+// instalada: guardamos o evento e sugerimos a instalação no início e no lobby
+// (só em ecrã tátil, até ser instalada ou dispensada). No iPhone não há este
+// evento — lá instala-se pelo menu Partilhar → "Adicionar ao ecrã principal".
+const INSTALL_OFF_KEY='cap_install_off';
+let _installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); _installEvt=e; updateInstallHints(); });
+window.addEventListener('appinstalled',()=>{ _installEvt=null; updateInstallHints(); });
+function updateInstallHints(){
+  const show=!!_installEvt&&!isPwaInstalled()&&matchMedia('(pointer: coarse)').matches&&!lsGet(INSTALL_OFF_KEY);
+  document.querySelectorAll('[data-install-hint]').forEach(el=>{
+    el.classList.toggle('show',show);
+    if(show&&!el.innerHTML) el.innerHTML=
+      '<div class="tut-hint-text"><b>📲 Instala o Capivaras</b> e joga em ecrã inteiro, a partir do ecrã principal do telemóvel.</div>'+
+      '<button class="btn btn-primary btn-sm" onclick="installApp()">Instalar</button>'+
+      '<button class="tut-exit" onclick="dismissInstallHint()">Agora não</button>';
+  });
+}
+async function installApp(){
+  const e=_installEvt; if(!e) return;
+  _installEvt=null; updateInstallHints(); // o evento só pode ser usado uma vez
+  e.prompt(); try{ await e.userChoice; }catch(_){}
+}
+function dismissInstallHint(){ lsSet(INSTALL_OFF_KEY,'1'); updateInstallHints(); }
 
 if(sessionStorage.getItem('cap_token')) connect();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

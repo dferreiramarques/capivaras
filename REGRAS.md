@@ -13,7 +13,7 @@ No coração húmido do Pantanal, uma colónia de capivaras relaxa ao sol. Chega
 1. Escreve o teu nome no ecrã inicial.
 2. Escolhe uma mesa no lobby:
    - **Mesas multijogador (Mesa 1 a Mesa 5)** — até 6 jogadores humanos por mesa. O primeiro jogador a entrar é o anfitrião e é quem carrega em **"Iniciar Jogo"** quando houver pelo menos 2 jogadores sentados.
-   - **Mesa Solo (vs 2 IAs)** — entras sozinho e o jogo começa logo, contra dois bots (Bot Capivaras 1 e Bot Capivaras 2). Esta mesa é sempre privada — é criada só para ti no momento em que entras.
+   - **Mesa Solo (vs 2 IAs)** — entras sozinho e o jogo começa logo, contra dois bots (Bot-capi 1 e Bot-capi 2). Esta mesa é sempre privada — é criada só para ti no momento em que entras.
 3. Se a ligação cair a meio do jogo, tens **45 segundos** para voltar a abrir a página (o teu lugar fica reservado). Se não voltares a tempo, o teu lugar é libertado e — em jogos multijogador com menos de 2 jogadores restantes — o jogo termina.
 
 ## Objetivo
